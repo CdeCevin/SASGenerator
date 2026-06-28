@@ -240,48 +240,59 @@ def fetch_formats(url: str = Query(..., description="URL del video de YouTube u 
     """
     Obtiene los formatos y resoluciones de video disponibles
     """
+    # 1. Intentar con la configuración ideal (con cookies si existen)
+    ydl_opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'nocheckcertificate': True,
+        'impersonate': ImpersonateTarget.from_str('chrome')
+    }
+    
+    if os.path.exists(COOKIES_PATH):
+        ydl_opts['cookiefile'] = COOKIES_PATH
+
     try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+    except Exception as e:
+        # 2. Si falla (por cookies inválidas o bloqueo), reintentamos sin cookies y forzando android/ios/tv
+        print(f"[SASDownloader] Fallo en fetch principal, reintentando con fallback sin cookies: {str(e)}")
         ydl_opts = {
             'quiet': True,
             'no_warnings': True,
             'nocheckcertificate': True,
-            'impersonate': ImpersonateTarget.from_str('chrome')
-        }
-        
-        if os.path.exists(COOKIES_PATH):
-            ydl_opts['cookiefile'] = COOKIES_PATH
-            # Con cookies podemos usar el cliente web por defecto para obtener todas las calidades
-        else:
-            # Sin cookies, evitamos clientes web para no gatillar bot checks
-            ydl_opts['extractor_args'] = {
+            'impersonate': ImpersonateTarget.from_str('chrome'),
+            'extractor_args': {
                 'youtube': {
                     'player_client': ['android', 'ios', 'tv', '-web', '-mweb', '-web_safari']
                 }
             }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            resolutions = set()
-            
-            for f in info.get('formats', []):
-                # Validar que tenga pista de video (vcodec != 'none') y una altura definida
-                if f.get('vcodec') != 'none' and f.get('height') is not None:
-                    resolutions.add(f'{f["height"]}p')
-            
-            # Ordenar resoluciones de mayor a menor (1080p, 720p, etc.)
-            sorted_resolutions = sorted(
-                list(resolutions), 
-                key=lambda x: int(x.replace('p', '')), 
-                reverse=True
-            )
-            
-            return {
-                "title": info.get('title', 'Video'),
-                "duration": info.get('duration', 0),
-                "formats": ["Mejor calidad disponible"] + sorted_resolutions
-            }
-            
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error al obtener formatos del video: {str(e)}")
+        }
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+        except Exception as fallback_error:
+            raise HTTPException(status_code=400, detail=f"Error al obtener formatos del video: {str(fallback_error)}")
+
+    try:
+        resolutions = set()
+        for f in info.get('formats', []):
+            if f.get('vcodec') != 'none' and f.get('height') is not None:
+                resolutions.add(f'{f["height"]}p')
+        
+        sorted_resolutions = sorted(
+            list(resolutions), 
+            key=lambda x: int(x.replace('p', '')), 
+            reverse=True
+        )
+        
+        return {
+            "title": info.get('title', 'Video'),
+            "duration": info.get('duration', 0),
+            "formats": ["Mejor calidad disponible"] + sorted_resolutions
+        }
+    except Exception as parse_error:
+        raise HTTPException(status_code=500, detail=f"Error al procesar formatos extraídos: {str(parse_error)}")
 
 @app.get("/download")
 def download_video(
@@ -346,24 +357,42 @@ def download_video(
         final_extension = '.mp3'
 
     try:
-        # 4. Iniciar descarga en el servidor
+        # 4. Iniciar descarga en el servidor (intento principal)
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
-            
-            # Si yt-dlp re-empaquetó en mp4 o convirtió en mp3, la extensión real puede variar del template inicial
-            base_path = os.path.splitext(filename)[0]
-            filename_real = base_path + final_extension
-
-        # 5. Enviar el archivo procesado de vuelta al navegador
-        if os.path.exists(filename_real):
-            return FileResponse(
-                filename_real, 
-                media_type='application/octet-stream', 
-                filename=os.path.basename(filename_real)
-            )
-        else:
-            raise HTTPException(status_code=500, detail="El archivo se descargó pero no se encuentra en el servidor temporal.")
-            
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error durante el procesamiento/descarga: {str(e)}")
+        print(f"[SASDownloader] Fallo en descarga principal, intentando fallback sin cookies: {str(e)}")
+        # Reintentar sin cookies y forzando android/ios/tv
+        ydl_opts['extractor_args'] = {
+            'youtube': {
+                'player_client': ['android', 'ios', 'tv', '-web', '-mweb', '-web_safari']
+            }
+        }
+        if 'cookiefile' in ydl_opts:
+            del ydl_opts['cookiefile']
+            
+        # Si falló pidiendo calidades de video específicas (que tal vez no existan en android/tv), forzamos 'best'
+        if format_type == "Video":
+            ydl_opts['format'] = 'best'
+            
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                filename = ydl.prepare_filename(info)
+        except Exception as fallback_error:
+            raise HTTPException(status_code=500, detail=f"Error durante el procesamiento/descarga: {str(fallback_error)}")
+
+    # 5. Enviar el archivo procesado de vuelta al navegador
+    # Si yt-dlp re-empaquetó en mp4 o convirtió en mp3, la extensión real puede variar del template inicial
+    base_path = os.path.splitext(filename)[0]
+    filename_real = base_path + final_extension
+    
+    if os.path.exists(filename_real):
+        return FileResponse(
+            filename_real, 
+            media_type='application/octet-stream', 
+            filename=os.path.basename(filename_real)
+        )
+    else:
+        raise HTTPException(status_code=500, detail="El archivo se descargó pero no se encuentra en el servidor temporal.")
