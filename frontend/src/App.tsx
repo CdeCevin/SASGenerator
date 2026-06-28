@@ -757,7 +757,7 @@ export default function App() {
     <div className="app-container">
       <header className="header">
         <div className="title-container">
-          <h1>Meme Studio & IA Background Remover</h1>
+          <h1>TheSAS: Meme Studio</h1>
         </div>
 
         <div className="header-actions">
