@@ -101,6 +101,22 @@ export default function App() {
     return () => window.removeEventListener('resize', updateScale);
   }, [canvasWidth, activeTab]);
 
+  // Prevenir que el navegador abra la imagen al arrastrarla fuera de las zonas de drop
+  useEffect(() => {
+    const preventDefault = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    window.addEventListener('dragover', preventDefault);
+    window.addEventListener('drop', preventDefault);
+
+    return () => {
+      window.removeEventListener('dragover', preventDefault);
+      window.removeEventListener('drop', preventDefault);
+    };
+  }, []);
+
   // Manejar el cambio de presets de tamaño del lienzo
   const applyPreset = (presetName: string) => {
     setPreset(presetName);
@@ -279,6 +295,49 @@ export default function App() {
           name: `🖼️ ${files[0].name}`,
           x: canvasWidth / 2 - 200,
           y: canvasHeight / 2 - 200,
+          width: 400,
+          height: 400,
+          rotation: 0,
+          zIndex: layers.length + 1,
+          imageUrl: event.target?.result as string,
+        };
+        setLayers([newLayer, ...layers]);
+        setLayerCounter(prev => prev + 1);
+        setSelectedLayerId(newLayer.id);
+      };
+      reader.readAsDataURL(files[0]);
+    }
+  };
+
+  const handleCanvasDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleCanvasDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const files = e.dataTransfer.files;
+    if (files && files[0] && files[0].type.startsWith('image/')) {
+      const canvasRect = canvasRef.current?.getBoundingClientRect();
+      let dropX = canvasWidth / 2 - 200;
+      let dropY = canvasHeight / 2 - 200;
+
+      if (canvasRect) {
+        // Calcular la posición relativa al lienzo, considerando la escala
+        dropX = (e.clientX - canvasRect.left) / canvasScale - 200;
+        dropY = (e.clientY - canvasRect.top) / canvasScale - 200;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const newLayer: Layer = {
+          id: `img_${layerCounter}`,
+          type: 'image',
+          name: `🖼️ ${files[0].name}`,
+          x: dropX,
+          y: dropY,
           width: 400,
           height: 400,
           rotation: 0,
@@ -864,6 +923,8 @@ export default function App() {
                   <div 
                     ref={canvasRef}
                     className="canvas-inner"
+                    onDragOver={handleCanvasDragOver}
+                    onDrop={handleCanvasDrop}
                     style={{
                       backgroundColor: canvasBackground.type === 'color' ? canvasBackground.value : 'transparent',
                       backgroundImage: canvasBackground.type === 'image' ? `url(${canvasBackground.value})` : 'none',
