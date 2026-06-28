@@ -63,7 +63,7 @@ export default function App() {
   // Lógica de arrastre de capas
   const [activeAction, setActiveAction] = useState<{
     type: 'drag' | 'resize' | 'rotate';
-    handle?: 'tl' | 'tr' | 'bl' | 'br';
+    handle?: 'tl' | 'tr' | 'bl' | 'br' | 't' | 'b' | 'l' | 'r';
     layerId: string;
     startX: number;
     startY: number;
@@ -427,7 +427,7 @@ export default function App() {
   // -------------------------------------------------------------
   // --- MATEMÁTICAS DE ARRASTRE, REDIMENSIONADO Y ROTACIÓN ---
   // -------------------------------------------------------------
-  const handleLayerMouseDown = (e: React.MouseEvent, layerId: string, handle?: 'tl' | 'tr' | 'bl' | 'br' | 'rot') => {
+  const handleLayerMouseDown = (e: React.MouseEvent, layerId: string, handle?: 'tl' | 'tr' | 'bl' | 'br' | 't' | 'b' | 'l' | 'r' | 'rot') => {
     e.preventDefault();
     e.stopPropagation();
     
@@ -546,6 +546,10 @@ export default function App() {
         else if (activeAction.handle === 'bl') { pxLocal = activeAction.startLayerW; pyLocal = 0; } // Anclaje top-right
         else if (activeAction.handle === 'tr') { pxLocal = 0; pyLocal = activeAction.startLayerH; } // Anclaje bottom-left
         else if (activeAction.handle === 'tl') { pxLocal = activeAction.startLayerW; pyLocal = activeAction.startLayerH; } // Anclaje bottom-right
+        else if (activeAction.handle === 't') { pxLocal = activeAction.startLayerW / 2; pyLocal = activeAction.startLayerH; } // Anclaje bottom-center
+        else if (activeAction.handle === 'b') { pxLocal = activeAction.startLayerW / 2; pyLocal = 0; } // Anclaje top-center
+        else if (activeAction.handle === 'l') { pxLocal = activeAction.startLayerW; pyLocal = activeAction.startLayerH / 2; } // Anclaje right-center
+        else if (activeAction.handle === 'r') { pxLocal = 0; pyLocal = activeAction.startLayerH / 2; } // Anclaje left-center
 
         // Calcular el punto de anclaje en el canvas (coordenadas del mundo)
         const cx = activeAction.startLayerX + activeAction.startLayerW / 2;
@@ -571,9 +575,14 @@ export default function App() {
         else if (activeAction.handle === 'bl') { w = -projX; h = projY; }
         else if (activeAction.handle === 'tr') { w = projX; h = -projY; }
         else if (activeAction.handle === 'tl') { w = -projX; h = -projY; }
+        else if (activeAction.handle === 't') { h = -projY; }
+        else if (activeAction.handle === 'b') { h = projY; }
+        else if (activeAction.handle === 'l') { w = -projX; }
+        else if (activeAction.handle === 'r') { w = projX; }
 
-        // Mantener relación de aspecto para imágenes
-        if (layer.type === 'image') {
+        // Mantener relación de aspecto para imágenes (solo para esquinas)
+        const isCorner = ['tl', 'tr', 'bl', 'br'].includes(activeAction.handle);
+        if (layer.type === 'image' && isCorner) {
           const aspect = activeAction.startLayerW / activeAction.startLayerH;
           if (Math.abs(w - activeAction.startLayerW) > Math.abs(h - activeAction.startLayerH)) {
             h = w / aspect;
@@ -586,23 +595,20 @@ export default function App() {
         w = Math.max(20, w);
         h = Math.max(20, h);
 
-        // Calcular nueva posición top-left del lienzo usando la fórmula del anclaje inverso
-        let newX = 0;
-        let newY = 0;
+        // Calcular nueva posición top-left del lienzo usando el anclaje local basado en las nuevas dimensiones
+        let px = 0;
+        let py = 0;
+        if (activeAction.handle === 'br') { px = 0; py = 0; }
+        else if (activeAction.handle === 'bl') { px = w; py = 0; }
+        else if (activeAction.handle === 'tr') { px = 0; py = h; }
+        else if (activeAction.handle === 'tl') { px = w; py = h; }
+        else if (activeAction.handle === 't') { px = w / 2; py = h; }
+        else if (activeAction.handle === 'b') { px = w / 2; py = 0; }
+        else if (activeAction.handle === 'l') { px = w; py = h / 2; }
+        else if (activeAction.handle === 'r') { px = 0; py = h / 2; }
 
-        if (activeAction.handle === 'br') { // pxLocal = 0, pyLocal = 0
-          newX = anchorX - w / 2 - (-w / 2) * cos + (-h / 2) * sin;
-          newY = anchorY - h / 2 - (-w / 2) * sin - (-h / 2) * cos;
-        } else if (activeAction.handle === 'bl') { // pxLocal = w, pyLocal = 0
-          newX = anchorX - w / 2 - (w - w / 2) * cos + (-h / 2) * sin;
-          newY = anchorY - h / 2 - (w - w / 2) * sin - (-h / 2) * cos;
-        } else if (activeAction.handle === 'tr') { // pxLocal = 0, pyLocal = h
-          newX = anchorX - w / 2 - (-w / 2) * cos + (h - h / 2) * sin;
-          newY = anchorY - h / 2 - (-w / 2) * sin - (h - h / 2) * cos;
-        } else if (activeAction.handle === 'tl') { // pxLocal = w, pyLocal = h
-          newX = anchorX - w / 2 - (w - w / 2) * cos + (h - h / 2) * sin;
-          newY = anchorY - h / 2 - (w - w / 2) * sin - (h - h / 2) * cos;
-        }
+        const newX = anchorX - w / 2 - (px - w / 2) * cos + (py - h / 2) * sin;
+        const newY = anchorY - h / 2 - (px - w / 2) * sin - (py - h / 2) * cos;
 
         setLayers(prev => prev.map(l => {
           if (l.id === layer.id) {
@@ -1019,6 +1025,11 @@ export default function App() {
                               <div className="handle handle-tr" onMouseDown={(e) => handleLayerMouseDown(e, layer.id, 'tr')} />
                               <div className="handle handle-bl" onMouseDown={(e) => handleLayerMouseDown(e, layer.id, 'bl')} />
                               <div className="handle handle-br" onMouseDown={(e) => handleLayerMouseDown(e, layer.id, 'br')} />
+                              
+                              <div className="handle handle-t" onMouseDown={(e) => handleLayerMouseDown(e, layer.id, 't')} />
+                              <div className="handle handle-b" onMouseDown={(e) => handleLayerMouseDown(e, layer.id, 'b')} />
+                              <div className="handle handle-l" onMouseDown={(e) => handleLayerMouseDown(e, layer.id, 'l')} />
+                              <div className="handle handle-r" onMouseDown={(e) => handleLayerMouseDown(e, layer.id, 'r')} />
                               
                               <div className="handle-rot-line" />
                               <div className="handle-rot" onMouseDown={(e) => handleLayerMouseDown(e, layer.id, 'rot')} />

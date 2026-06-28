@@ -390,6 +390,11 @@
 .handle-bl { bottom: -6px; left: -6px; cursor: nesw-resize; }
 .handle-br { bottom: -6px; right: -6px; cursor: nwse-resize; }
 
+.handle-t { top: -6px; left: calc(50% - 6px); cursor: ns-resize; }
+.handle-b { bottom: -6px; left: calc(50% - 6px); cursor: ns-resize; }
+.handle-l { top: calc(50% - 6px); left: -6px; cursor: ew-resize; }
+.handle-r { top: calc(50% - 6px); right: -6px; cursor: ew-resize; }
+
 .handle-rot {
   position: absolute;
   top: -36px;
