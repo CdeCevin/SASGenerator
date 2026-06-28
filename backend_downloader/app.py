@@ -1,6 +1,7 @@
 import os
 import glob
 import yt_dlp
+from yt_dlp.networking.impersonate import ImpersonateTarget
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,7 +37,8 @@ def fetch_formats(url: str = Query(..., description="URL del video de YouTube u 
         ydl_opts = {
             'quiet': True,
             'no_warnings': True,
-            'nocheckcertificate': True
+            'nocheckcertificate': True,
+            'impersonate': ImpersonateTarget.from_str('chrome')
         }
         
         if os.path.exists(COOKIES_PATH):
@@ -91,7 +93,8 @@ def download_video(
         'outtmpl': output_template,
         'quiet': True,
         'no_warnings': True,
-        'nocheckcertificate': True
+        'nocheckcertificate': True,
+        'impersonate': ImpersonateTarget.from_str('chrome')
     }
     
     if os.path.exists(COOKIES_PATH):
