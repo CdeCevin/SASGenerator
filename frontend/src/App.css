@@ -491,6 +491,12 @@
   background: rgba(139, 92, 246, 0.08);
 }
 
+.layer-item.dragging {
+  opacity: 0.4;
+  border: 1px dashed var(--primary);
+  background: rgba(255,255,255,0.02);
+}
+
 .layer-info {
   display: flex;
   align-items: center;

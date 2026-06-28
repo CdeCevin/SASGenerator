@@ -62,9 +62,35 @@ export default function App() {
   const [canvasBackground, setCanvasBackground] = useState<{
     type: 'color' | 'image';
     value: string;
-  }>({ type: 'color', value: '#2b2b2b' });
+  }>({ type: 'color', value: 'transparent' });
   const [preset, setPreset] = useState<string>('original');
   const [layerCounter, setLayerCounter] = useState<number>(1);
+
+  // Historial para deshacer (Ctrl+Z) y arrastre de capas en la lista
+  const [history, setHistory] = useState<Layer[][]>([]);
+  const [draggedLayerId, setDraggedLayerId] = useState<string | null>(null);
+
+  const saveHistory = (currentLayers: Layer[]) => {
+    setHistory(prev => {
+      const newHistory = [...prev, currentLayers];
+      if (newHistory.length > 50) {
+        newHistory.shift();
+      }
+      return newHistory;
+    });
+  };
+
+  const handleUndo = () => {
+    setHistory(prev => {
+      if (prev.length === 0) return prev;
+      const newHistory = [...prev];
+      const previousState = newHistory.pop();
+      if (previousState) {
+        setLayers(previousState);
+      }
+      return newHistory;
+    });
+  };
 
   // --- Referencias y Responsividad ---
   const canvasContainerRef = useRef<HTMLDivElement>(null);
@@ -87,6 +113,33 @@ export default function App() {
     startLayerRot: number;
   } | null>(null);
 
+
+  // Atajos de teclado: Delete/Backspace para eliminar capa, Ctrl+Z para deshacer
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeTag = document.activeElement?.tagName.toLowerCase();
+      if (activeTag === 'input' || activeTag === 'textarea' || document.activeElement?.getAttribute('contenteditable') === 'true') {
+        return;
+      }
+
+      // Deshacer (Ctrl + Z)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        handleUndo();
+      }
+
+      // Eliminar capa (Delete o Backspace)
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedLayerId) {
+          e.preventDefault();
+          handleDeleteLayer(selectedLayerId);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedLayerId, layers, history]);
 
   // Ajustar la escala del lienzo responsivo
   useEffect(() => {
@@ -232,6 +285,7 @@ export default function App() {
 
   const handleSendToCanvas = () => {
     if (!resultImage) return;
+    saveHistory(layers);
     
     // Crear una nueva capa de imagen
     const newLayer: Layer = {
@@ -372,6 +426,7 @@ export default function App() {
   // --- LÓGICA DEL GENERADOR DE MEMES (Canvas) ---
   // -------------------------------------------------------------
   const handleAddText = () => {
+    saveHistory(layers);
     const newLayer: Layer = {
       id: `txt_${layerCounter}`,
       type: 'text',
@@ -400,6 +455,7 @@ export default function App() {
     if (files && files[0]) {
       const reader = new FileReader();
       reader.onload = (event) => {
+        saveHistory(layers);
         const newLayer: Layer = {
           id: `img_${layerCounter}`,
           type: 'image',
@@ -443,6 +499,7 @@ export default function App() {
 
       const reader = new FileReader();
       reader.onload = (event) => {
+        saveHistory(layers);
         const newLayer: Layer = {
           id: `img_${layerCounter}`,
           type: 'image',
@@ -467,31 +524,48 @@ export default function App() {
     const targetId = idToDelete || selectedLayerId;
     if (!targetId) return;
     
+    saveHistory(layers);
     setLayers(prev => prev.filter(layer => layer.id !== targetId));
     if (selectedLayerId === targetId) {
       setSelectedLayerId(null);
     }
   };
 
-  const handleZIndexChange = (direction: 'up' | 'down', id: string) => {
-    setLayers(prev => {
-      const sorted = [...prev].sort((a, b) => b.zIndex - a.zIndex); // ZIndex descendente (capa de arriba primero)
-      const index = sorted.findIndex(l => l.id === id);
-      if (index === -1) return prev;
+  const handleLayerDragStart = (e: React.DragEvent, id: string) => {
+    e.dataTransfer.setData('text/plain', id);
+    setDraggedLayerId(id);
+  };
 
-      if (direction === 'up' && index > 0) {
-        // Intercambiar Z-Index con el de arriba en la lista (que se dibuja después, es decir, tiene mayor ZIndex)
-        const temp = sorted[index].zIndex;
-        sorted[index].zIndex = sorted[index - 1].zIndex;
-        sorted[index - 1].zIndex = temp;
-      } else if (direction === 'down' && index < sorted.length - 1) {
-        // Intercambiar Z-Index con el de abajo en la lista
-        const temp = sorted[index].zIndex;
-        sorted[index].zIndex = sorted[index + 1].zIndex;
-        sorted[index + 1].zIndex = temp;
-      }
-      return sorted;
+  const handleLayerDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+  };
+
+  const handleLayerDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    const sourceId = e.dataTransfer.getData('text/plain') || draggedLayerId;
+    if (!sourceId || sourceId === targetId) return;
+
+    saveHistory(layers);
+
+    setLayers(prev => {
+      const sorted = [...prev].sort((a, b) => b.zIndex - a.zIndex); // Mayor zIndex primero (orden de la lista)
+      const sourceIndex = sorted.findIndex(l => l.id === sourceId);
+      const targetIndex = sorted.findIndex(l => l.id === targetId);
+      if (sourceIndex === -1 || targetIndex === -1) return prev;
+
+      // Mover elemento en el array
+      const [removed] = sorted.splice(sourceIndex, 1);
+      sorted.splice(targetIndex, 0, removed);
+
+      // Reasignar zIndex descendente: el primero de la lista (index 0) tiene el mayor zIndex
+      const total = sorted.length;
+      return sorted.map((layer, idx) => ({
+        ...layer,
+        zIndex: total - idx
+      }));
     });
+
+    setDraggedLayerId(null);
   };
 
   const handleBgColorChange = (color: string) => {
@@ -513,11 +587,12 @@ export default function App() {
   };
 
   const handleClearBg = () => {
-    setCanvasBackground({ type: 'color', value: '#2b2b2b' });
+    setCanvasBackground({ type: 'color', value: 'transparent' });
   };
 
   const updateSelectedLayer = (updates: Partial<Layer>) => {
     if (!selectedLayerId) return;
+    saveHistory(layers);
     setLayers(prev => prev.map(layer => {
       if (layer.id === selectedLayerId) {
         const updated = { ...layer, ...updates };
@@ -543,6 +618,7 @@ export default function App() {
     e.stopPropagation();
     
     setSelectedLayerId(layerId);
+    saveHistory(layers);
 
     const layer = layers.find(l => l.id === layerId);
     if (!layer) return;
@@ -782,8 +858,12 @@ export default function App() {
 
       // 1. Dibujar el fondo
       if (canvasBackground.type === 'color') {
-        ctx.fillStyle = canvasBackground.value;
-        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        if (canvasBackground.value !== 'transparent') {
+          ctx.fillStyle = canvasBackground.value;
+          ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        } else {
+          ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+        }
       } else if (canvasBackground.type === 'image' && canvasBackground.value) {
         try {
           const bgImg = await loadImageAsync(canvasBackground.value);
@@ -864,8 +944,9 @@ export default function App() {
 
   const handleResetCanvas = () => {
     if (window.confirm('¿Estás seguro de que quieres borrar todo el lienzo?')) {
+      saveHistory(layers);
       setLayers([]);
-      setCanvasBackground({ type: 'color', value: '#2b2b2b' });
+      setCanvasBackground({ type: 'color', value: 'transparent' });
       setSelectedLayerId(null);
     }
   };
@@ -1044,7 +1125,7 @@ export default function App() {
                 >
                   <div 
                     ref={canvasRef}
-                    className="canvas-inner"
+                    className="canvas-inner transparency-pattern"
                     onDragOver={handleCanvasDragOver}
                     onDrop={handleCanvasDrop}
                     style={{
@@ -1196,9 +1277,9 @@ export default function App() {
                   accept="image/*" 
                   style={{ display: 'none' }} 
                 />
-                {canvasBackground.type === 'image' && (
+                {(canvasBackground.type === 'image' || (canvasBackground.type === 'color' && canvasBackground.value !== 'transparent')) && (
                   <button className="btn btn-secondary" style={{ width: '100%', padding: '6px', fontSize: '12px' }} onClick={handleClearBg}>
-                    Limpiar Fondo
+                    Hacer Transparente
                   </button>
                 )}
               </div>
@@ -1214,20 +1295,19 @@ export default function App() {
                   <div className="layer-list">
                     {layers.map(layer => {
                       const isActive = layer.id === selectedLayerId;
+                      const isDragging = layer.id === draggedLayerId;
                       return (
                         <div 
                           key={layer.id} 
-                          className={`layer-item ${isActive ? 'active' : ''}`}
+                          className={`layer-item ${isActive ? 'active' : ''} ${isDragging ? 'dragging' : ''}`}
                           onClick={() => setSelectedLayerId(layer.id)}
+                          draggable
+                          onDragStart={(e) => handleLayerDragStart(e, layer.id)}
+                          onDragOver={(e) => handleLayerDragOver(e, layer.id)}
+                          onDrop={(e) => handleLayerDrop(e, layer.id)}
                         >
-                          <span className="layer-info">{layer.name}</span>
+                          <span className="layer-info">☰ {layer.name}</span>
                           <div className="layer-actions" onClick={e => e.stopPropagation()}>
-                            <button className="icon-btn" onClick={() => handleZIndexChange('up', layer.id)} title="Traer al frente" style={{ fontSize: '10px', fontWeight: 'bold' }}>
-                              UP
-                            </button>
-                            <button className="icon-btn" onClick={() => handleZIndexChange('down', layer.id)} title="Enviar al fondo" style={{ fontSize: '10px', fontWeight: 'bold' }}>
-                              DOWN
-                            </button>
                             <button className="icon-btn danger" onClick={() => handleDeleteLayer(layer.id)} title="Borrar capa" style={{ fontSize: '10px', fontWeight: 'bold' }}>
                               BORRAR
                             </button>
