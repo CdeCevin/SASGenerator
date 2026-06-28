@@ -36,14 +36,14 @@ export default function App() {
   const [ytUrl, setYtUrl] = useState<string>('');
   const [isFetchingFormats, setIsFetchingFormats] = useState<boolean>(false);
   const [formats, setFormats] = useState<string[]>([]);
-  const [videoTitle, setVideoTitle] = useState<string>('');
-  const [videoDuration, setVideoDuration] = useState<number>(0);
   const [downloadFormat, setDownloadFormat] = useState<'Video' | 'Audio'>('Video');
   const [downloadQuality, setDownloadQuality] = useState<string>('Mejor calidad disponible');
   const [customFileName, setCustomFileName] = useState<string>('');
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [downloadStatus, setDownloadStatus] = useState<string>('');
+  const [logs, setLogs] = useState<string[]>(['[Sistema] Listo para descargar.']);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // --- Estados de Quitar Fondo ---
   const [sourceImage, setSourceImage] = useState<string | null>(null);
@@ -320,22 +320,28 @@ export default function App() {
   // -------------------------------------------------------------
   // --- LÓGICA DEL DESCARGADOR (API) ---
   // -------------------------------------------------------------
+  const addLog = (message: string) => {
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    setLogs(prev => [...prev, `[${time}] ${message}`]);
+  };
+
   const handleFetchFormats = async () => {
     if (!ytUrl.trim()) {
       setDownloadError('Por favor, ingresa una URL válida.');
+      addLog('Error: URL vacía.');
       return;
     }
 
     if (!downloaderUrl) {
       setDownloadError('Configura la variable de entorno VITE_DOWNLOADER_API_URL para el servidor de descargas.');
+      addLog('Error: URL del servidor de descargas no configurada.');
       return;
     }
 
     setIsFetchingFormats(true);
     setDownloadError(null);
     setFormats([]);
-    setVideoTitle('');
-    setVideoDuration(0);
+    addLog(`Buscando formatos para: ${ytUrl}`);
 
     try {
       const cleanApiUrl = downloaderUrl.replace(/\/$/, '');
@@ -347,12 +353,15 @@ export default function App() {
       }
 
       const data = await response.json();
-      setVideoTitle(data.title || 'Video');
-      setVideoDuration(data.duration || 0);
       setFormats(data.formats || ['Mejor calidad disponible']);
       setDownloadQuality('Mejor calidad disponible');
+      
+      addLog(`Video encontrado: "${data.title || 'Video'}"`);
+      addLog(`Formatos cargados exitosamente: ${data.formats ? data.formats.length : 1} calidades.`);
     } catch (err: any) {
-      setDownloadError(err.message || 'Error al buscar formatos en el servidor.');
+      const errMsg = err.message || 'Error al buscar formatos en el servidor.';
+      setDownloadError(errMsg);
+      addLog(`Error al buscar formatos: ${errMsg}`);
     } finally {
       setIsFetchingFormats(false);
     }
@@ -363,12 +372,17 @@ export default function App() {
 
     if (!downloaderUrl) {
       setDownloadError('Configura la variable de entorno VITE_DOWNLOADER_API_URL para el servidor de descargas.');
+      addLog('Error: URL del servidor de descargas no configurada.');
       return;
     }
 
     setIsDownloading(true);
     setDownloadError(null);
-    setDownloadStatus('Conectando con el servidor de descargas...');
+    setDownloadStatus('Conectando con el servidor...');
+    addLog(`Iniciando descarga en formato: ${downloadFormat === 'Video' ? `Video (MP4 - ${downloadQuality})` : 'Audio (MP3)'}`);
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     try {
       const cleanApiUrl = downloaderUrl.replace(/\/$/, '');
@@ -377,15 +391,17 @@ export default function App() {
         `&quality=${encodeURIComponent(downloadQuality)}` + 
         `&custom_name=${encodeURIComponent(customFileName)}`;
 
-      setDownloadStatus('Descargando y convirtiendo en el servidor (esto puede demorar un par de minutos)...');
+      addLog('Descargando y procesando en Hugging Face (esto puede demorar un par de minutos)...');
+      setDownloadStatus('Descargando y convirtiendo en el servidor...');
       
-      const response = await fetch(downloadEndpoint);
+      const response = await fetch(downloadEndpoint, { signal: controller.signal });
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.detail || 'El servidor falló durante la descarga.');
       }
 
+      addLog('Descarga finalizada en el servidor. Transfiriendo archivo al navegador...');
       setDownloadStatus('Recibiendo archivo en tu navegador...');
       
       const blob = await response.blob();
@@ -414,12 +430,38 @@ export default function App() {
       
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
+      
+      addLog(`¡Descarga completada! Archivo guardado: "${filename}"`);
     } catch (err: any) {
-      setDownloadError(err.message || 'Error al procesar la descarga.');
+      if (err.name === 'AbortError') {
+        addLog('Descarga cancelada por el usuario.');
+      } else {
+        const errMsg = err.message || 'Error al procesar la descarga.';
+        setDownloadError(errMsg);
+        addLog(`Error en la descarga: ${errMsg}`);
+      }
     } finally {
       setIsDownloading(false);
       setDownloadStatus('');
+      abortControllerRef.current = null;
     }
+  };
+
+  const handleCancelDownload = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      addLog('Cancelando descarga a petición del usuario...');
+    }
+  };
+
+  const handleExaminar = () => {
+    addLog('Examinar carpeta solicitado.');
+    alert('En la versión web, las descargas se guardan en la carpeta predeterminada de tu navegador (habitualmente Descargas).');
+  };
+
+  const handleAbrirUbicacion = () => {
+    addLog('Abrir ubicación de descargas solicitado.');
+    alert('Para ver tus descargas en el navegador, presiona Ctrl + J (o Cmd + Option + L en Mac).');
   };
 
   // -------------------------------------------------------------
@@ -1447,110 +1489,160 @@ export default function App() {
         {/* --- PESTAÑA: DESCARGADOR --- */}
         {activeTab === 'downloader' && (
           <div className="downloader-container animate-fade-in">
-            <div className="downloader-panel">
-              <h2>Descargador de Video/Audio</h2>
-              <p className="downloader-desc">Ingresa un enlace de YouTube para descargar video en formato MP4 o audio en MP3 de alta calidad.</p>
+            <div className="downloader-panel-legacy">
+              <div className="downloader-header-legacy">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" className="downloader-icon-legacy">
+                  <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                </svg>
+                <h2>SAS Downloader</h2>
+              </div>
               
-              <div className="input-row">
+              {/* URL del Video */}
+              <div className="form-group-legacy">
+                <label>URL del Video:</label>
+                <div className="input-row-legacy">
+                  <input 
+                    type="text" 
+                    placeholder="https://www.youtube.com/watch?v=..." 
+                    value={ytUrl}
+                    onChange={(e) => setYtUrl(e.target.value)}
+                    disabled={isFetchingFormats || isDownloading}
+                  />
+                  <button 
+                    className="btn-legacy" 
+                    onClick={handleFetchFormats}
+                    disabled={isFetchingFormats || isDownloading || !ytUrl.trim()}
+                  >
+                    {isFetchingFormats ? 'Cargando...' : 'Cargar Resoluciones'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Carpeta de Descarga */}
+              <div className="form-group-legacy">
+                <label>Carpeta de Descarga:</label>
+                <div className="input-row-legacy">
+                  <input 
+                    type="text" 
+                    value="Descargas (Predeterminada del navegador)" 
+                    disabled 
+                  />
+                  <button 
+                    className="btn-legacy" 
+                    onClick={handleExaminar}
+                  >
+                    Examinar
+                  </button>
+                </div>
+              </div>
+
+              {/* Formato de Descarga (Radio buttons en la misma fila) */}
+              <div className="form-group-legacy">
+                <label>Formato de Descarga:</label>
+                <div className="radio-row-legacy">
+                  <label className="radio-label-legacy">
+                    <input 
+                      type="radio" 
+                      name="format_type" 
+                      checked={downloadFormat === 'Video'} 
+                      onChange={() => setDownloadFormat('Video')}
+                      disabled={isDownloading}
+                    />
+                    <span>Video (MP4)</span>
+                  </label>
+                  
+                  {downloadFormat === 'Video' && (
+                    <select 
+                      value={downloadQuality} 
+                      onChange={(e) => setDownloadQuality(e.target.value)}
+                      disabled={isDownloading}
+                      className="select-legacy"
+                    >
+                      {formats.length > 0 ? (
+                        formats.map((fmt) => (
+                          <option key={fmt} value={fmt}>{fmt}</option>
+                        ))
+                      ) : (
+                        <option value="Mejor calidad disponible">Mejor calidad disponible</option>
+                      )}
+                    </select>
+                  )}
+
+                  <label className="radio-label-legacy" style={{ marginLeft: '25px' }}>
+                    <input 
+                      type="radio" 
+                      name="format_type" 
+                      checked={downloadFormat === 'Audio'} 
+                      onChange={() => setDownloadFormat('Audio')}
+                      disabled={isDownloading}
+                    />
+                    <span>Solo Audio (MP3)</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Nombre del archivo */}
+              <div className="form-group-legacy">
+                <label>Nombre del archivo:</label>
                 <input 
                   type="text" 
-                  className="downloader-input"
-                  placeholder="https://www.youtube.com/watch?v=..." 
-                  value={ytUrl}
-                  onChange={(e) => setYtUrl(e.target.value)}
-                  disabled={isFetchingFormats || isDownloading}
+                  className="input-block-legacy"
+                  placeholder="Ingresa el nombre del archivo..."
+                  value={customFileName}
+                  onChange={(e) => setCustomFileName(e.target.value)}
+                  disabled={isDownloading}
                 />
+              </div>
+
+              {/* Mensajes de error */}
+              {downloadError && (
+                <div className="download-error-box-legacy">
+                  {downloadError}
+                </div>
+              )}
+
+              {/* Texto de estado */}
+              <div className="status-text-legacy">
+                {isDownloading ? downloadStatus : isFetchingFormats ? 'Buscando formatos...' : 'Listo para descargar'}
+              </div>
+
+              {/* Botones de acción principales */}
+              <div className="actions-row-legacy">
                 <button 
-                  className="btn btn-primary" 
-                  onClick={handleFetchFormats}
-                  disabled={isFetchingFormats || isDownloading || !ytUrl.trim()}
+                  className="btn-action-legacy btn-start-legacy" 
+                  onClick={handleDownload}
+                  disabled={isDownloading || isFetchingFormats || !ytUrl.trim()}
                 >
-                  {isFetchingFormats ? 'Buscando...' : 'Buscar'}
+                  Iniciar Descarga
+                </button>
+                <button 
+                  className="btn-action-legacy btn-cancel-legacy" 
+                  onClick={handleCancelDownload}
+                  disabled={!isDownloading}
+                >
+                  Cancelar
                 </button>
               </div>
 
-              {downloadError && (
-                <div className="download-error-box">
-                  <div className="error-icon">!</div>
-                  <div className="error-text">{downloadError}</div>
+              {/* Log de Descarga */}
+              <div className="form-group-legacy" style={{ marginTop: '10px' }}>
+                <label>Log de Descarga:</label>
+                <div className="log-box-legacy">
+                  {logs.map((log, idx) => (
+                    <div key={idx} className="log-line-legacy">{log}</div>
+                  ))}
                 </div>
-              )}
+              </div>
 
-              {/* Mostrar metadatos y opciones si se obtuvieron formatos */}
-              {formats.length > 0 && !downloadError && (
-                <div className="downloader-options animate-fade-in" style={{ marginTop: '20px' }}>
-                  <div className="video-metadata">
-                    <span className="metadata-title">Título: {videoTitle}</span>
-                    {videoDuration > 0 && (
-                      <span className="metadata-duration">
-                        Duración: {Math.floor(videoDuration / 60)}:{(videoDuration % 60).toString().padStart(2, '0')}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="form-grid">
-                    <div className="form-group">
-                      <label>Tipo de Formato</label>
-                      <select 
-                        value={downloadFormat} 
-                        onChange={(e) => setDownloadFormat(e.target.value as 'Video' | 'Audio')}
-                        disabled={isDownloading}
-                      >
-                        <option value="Video">Video (MP4)</option>
-                        <option value="Audio">Audio (MP3)</option>
-                      </select>
-                    </div>
-
-                    <div className="form-group">
-                      <label>Calidad / Resolución</label>
-                      {downloadFormat === 'Video' ? (
-                        <select 
-                          value={downloadQuality} 
-                          onChange={(e) => setDownloadQuality(e.target.value)}
-                          disabled={isDownloading}
-                        >
-                          {formats.map((fmt) => (
-                            <option key={fmt} value={fmt}>{fmt}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <select disabled value="audio_best">
-                          <option value="audio_best">192 kbps (Mejor disponible)</option>
-                        </select>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="form-group" style={{ marginTop: '15px' }}>
-                    <label>Nombre de archivo personalizado (Opcional)</label>
-                    <input 
-                      type="text" 
-                      placeholder="Ej. mi_video_favorito (Dejar vacío para el título original)"
-                      value={customFileName}
-                      onChange={(e) => setCustomFileName(e.target.value)}
-                      disabled={isDownloading}
-                    />
-                  </div>
-
-                  <button 
-                    className="btn btn-accent btn-large" 
-                    onClick={handleDownload}
-                    disabled={isDownloading}
-                    style={{ marginTop: '25px', width: '100%', padding: '12px' }}
-                  >
-                    Comenzar Descarga
-                  </button>
-                </div>
-              )}
-
-              {(isFetchingFormats || isDownloading) && (
-                <div className="downloader-loader">
-                  <div className="spinner"></div>
-                  <span className="loader-status">
-                    {isFetchingFormats ? 'Obteniendo resoluciones disponibles...' : downloadStatus}
-                  </span>
-                </div>
-              )}
+              {/* Botones de acción del Log */}
+              <div className="log-actions-row-legacy">
+                <button className="btn-log-legacy" onClick={() => setLogs(['[Sistema] Log limpiado.'])}>
+                  Limpiar Log
+                </button>
+                <button className="btn-log-legacy" onClick={handleAbrirUbicacion}>
+                  Abrir ubicación
+                </button>
+              </div>
             </div>
           </div>
         )}
