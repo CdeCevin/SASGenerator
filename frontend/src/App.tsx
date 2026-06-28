@@ -536,7 +536,7 @@ export default function App() {
     setDraggedLayerId(id);
   };
 
-  const handleLayerDragOver = (e: React.DragEvent, id: string) => {
+  const handleLayerDragOver = (e: React.DragEvent) => {
     e.preventDefault();
   };
 
@@ -1303,7 +1303,7 @@ export default function App() {
                           onClick={() => setSelectedLayerId(layer.id)}
                           draggable
                           onDragStart={(e) => handleLayerDragStart(e, layer.id)}
-                          onDragOver={(e) => handleLayerDragOver(e, layer.id)}
+                          onDragOver={(e) => handleLayerDragOver(e)}
                           onDrop={(e) => handleLayerDrop(e, layer.id)}
                         >
                           <span className="layer-info">☰ {layer.name}</span>
