@@ -1,7 +1,6 @@
 import os
 import glob
 import yt_dlp
-from yt_dlp.networking.impersonate import ImpersonateTarget
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,6 +20,9 @@ app.add_middleware(
 TMP_DIR = "/tmp/downloads"
 os.makedirs(TMP_DIR, exist_ok=True)
 
+# El nombre del archivo que subiremos a Hugging Face
+COOKIES_PATH = "cookies.txt"
+
 @app.get("/")
 def read_root():
     return {"status": "ready", "service": "SASDownloader Legacy"}
@@ -34,14 +36,11 @@ def fetch_formats(url: str = Query(..., description="URL del video de YouTube u 
         ydl_opts = {
             'quiet': True,
             'no_warnings': True,
-            'nocheckcertificate': True,
-            'impersonate': ImpersonateTarget.from_str('chrome'),
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['ios', 'android', 'tv', '-web', '-mweb', '-web_safari']
-                }
-            }
+            'nocheckcertificate': True
         }
+        
+        if os.path.exists(COOKIES_PATH):
+            ydl_opts['cookiefile'] = COOKIES_PATH
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             resolutions = set()
@@ -92,14 +91,11 @@ def download_video(
         'outtmpl': output_template,
         'quiet': True,
         'no_warnings': True,
-        'nocheckcertificate': True,
-        'impersonate': ImpersonateTarget.from_str('chrome'),
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['ios', 'android', 'tv', '-web', '-mweb', '-web_safari']
-            }
-        }
+        'nocheckcertificate': True
     }
+    
+    if os.path.exists(COOKIES_PATH):
+        ydl_opts['cookiefile'] = COOKIES_PATH
 
     # 3. Configurar calidades y codecs
     final_extension = ''

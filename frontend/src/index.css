@@ -112,3 +112,34 @@ body {
   border-radius: 8px;
   border: 1px solid var(--border-color);
 }
+
+/* Custom Download Progress State */
+.download-progress-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  padding: 15px 20px;
+  border-radius: 8px;
+  margin: 15px 0;
+  animation: pulseGlow 2s infinite;
+}
+
+.spinner-glow {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 3px solid rgba(139, 92, 246, 0.3);
+  border-top-color: var(--primary);
+  animation: spin 1s linear infinite;
+  box-shadow: 0 0 10px var(--primary-glow);
+}
+
+.progress-text {
+  color: var(--primary-hover);
+  font-weight: 600;
+  font-size: 15px;
+  text-shadow: 0 0 8px rgba(139, 92, 246, 0.4);
+}

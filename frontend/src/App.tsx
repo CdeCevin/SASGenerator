@@ -454,16 +454,6 @@ export default function App() {
     }
   };
 
-  const handleExaminar = () => {
-    addLog('Examinar carpeta solicitado.');
-    alert('En la versión web, las descargas se guardan en la carpeta predeterminada de tu navegador (habitualmente Descargas).');
-  };
-
-  const handleAbrirUbicacion = () => {
-    addLog('Abrir ubicación de descargas solicitado.');
-    alert('Para ver tus descargas en el navegador, presiona Ctrl + J (o Cmd + Option + L en Mac).');
-  };
-
   // -------------------------------------------------------------
   // --- LÓGICA DEL GENERADOR DE MEMES (Canvas) ---
   // -------------------------------------------------------------
@@ -1497,19 +1487,19 @@ export default function App() {
                 <h2>SAS Downloader</h2>
               </div>
               
-              {/* URL del Video */}
-              <div className="form-group-legacy">
-                <label>URL del Video:</label>
-                <div className="input-row-legacy">
+              <div className="form-group">
+                <label style={{ color: 'var(--text-primary)', fontWeight: '600' }}>URL del Video:</label>
+                <div style={{ display: 'flex', gap: '10px' }}>
                   <input 
                     type="text" 
                     placeholder="https://www.youtube.com/watch?v=..." 
                     value={ytUrl}
                     onChange={(e) => setYtUrl(e.target.value)}
                     disabled={isFetchingFormats || isDownloading}
+                    style={{ flex: 1, padding: '10px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(0,0,0,0.2)', color: '#fff' }}
                   />
                   <button 
-                    className="btn-legacy" 
+                    className="btn btn-secondary" 
                     onClick={handleFetchFormats}
                     disabled={isFetchingFormats || isDownloading || !ytUrl.trim()}
                   >
@@ -1518,35 +1508,19 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Carpeta de Descarga */}
-              <div className="form-group-legacy">
-                <label>Carpeta de Descarga:</label>
-                <div className="input-row-legacy">
-                  <input 
-                    type="text" 
-                    value="Descargas (Predeterminada del navegador)" 
-                    disabled 
-                  />
-                  <button 
-                    className="btn-legacy" 
-                    onClick={handleExaminar}
-                  >
-                    Examinar
-                  </button>
-                </div>
-              </div>
 
-              {/* Formato de Descarga (Radio buttons en la misma fila) */}
-              <div className="form-group-legacy">
-                <label>Formato de Descarga:</label>
-                <div className="radio-row-legacy">
-                  <label className="radio-label-legacy">
+              {/* Formato de Descarga */}
+              <div className="form-group">
+                <label style={{ color: 'var(--text-primary)', fontWeight: '600' }}>Formato de Descarga:</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '20px', padding: '10px 0' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                     <input 
                       type="radio" 
                       name="format_type" 
                       checked={downloadFormat === 'Video'} 
                       onChange={() => setDownloadFormat('Video')}
                       disabled={isDownloading}
+                      style={{ accentColor: 'var(--primary)' }}
                     />
                     <span>Video (MP4)</span>
                   </label>
@@ -1556,7 +1530,7 @@ export default function App() {
                       value={downloadQuality} 
                       onChange={(e) => setDownloadQuality(e.target.value)}
                       disabled={isDownloading}
-                      className="select-legacy"
+                      style={{ padding: '6px 12px', borderRadius: '4px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', color: '#fff' }}
                     >
                       {formats.length > 0 ? (
                         formats.map((fmt) => (
@@ -1568,13 +1542,14 @@ export default function App() {
                     </select>
                   )}
 
-                  <label className="radio-label-legacy" style={{ marginLeft: '25px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginLeft: 'auto' }}>
                     <input 
                       type="radio" 
                       name="format_type" 
                       checked={downloadFormat === 'Audio'} 
                       onChange={() => setDownloadFormat('Audio')}
                       disabled={isDownloading}
+                      style={{ accentColor: 'var(--primary)' }}
                     />
                     <span>Solo Audio (MP3)</span>
                   </label>
@@ -1582,15 +1557,15 @@ export default function App() {
               </div>
 
               {/* Nombre del archivo */}
-              <div className="form-group-legacy">
-                <label>Nombre del archivo:</label>
+              <div className="form-group">
+                <label style={{ color: 'var(--text-primary)', fontWeight: '600' }}>Nombre del archivo (Opcional):</label>
                 <input 
                   type="text" 
-                  className="input-block-legacy"
-                  placeholder="Ingresa el nombre del archivo..."
+                  placeholder="Ej: Video épico (se usará el título original si lo omites)"
                   value={customFileName}
                   onChange={(e) => setCustomFileName(e.target.value)}
                   disabled={isDownloading}
+                  style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(0,0,0,0.2)', color: '#fff' }}
                 />
               </div>
 
@@ -1601,47 +1576,63 @@ export default function App() {
                 </div>
               )}
 
-              {/* Texto de estado */}
-              <div className="status-text-legacy">
-                {isDownloading ? downloadStatus : isFetchingFormats ? 'Buscando formatos...' : 'Listo para descargar'}
-              </div>
+              {/* Texto de estado visual */}
+              {isDownloading || isFetchingFormats ? (
+                <div className="download-progress-overlay">
+                  <div className="spinner-glow"></div>
+                  <div className="progress-text">
+                    {isDownloading ? downloadStatus : 'Buscando formatos...'}
+                  </div>
+                </div>
+              ) : (
+                <div className="status-text-legacy" style={{ color: 'var(--success)', fontWeight: 'bold' }}>
+                  ¡Listo para descargar!
+                </div>
+              )}
 
               {/* Botones de acción principales */}
-              <div className="actions-row-legacy">
+              <div style={{ display: 'flex', gap: '15px', marginTop: '20px' }}>
                 <button 
-                  className="btn-action-legacy btn-start-legacy" 
+                  className="btn btn-primary" 
                   onClick={handleDownload}
                   disabled={isDownloading || isFetchingFormats || !ytUrl.trim()}
+                  style={{ flex: 2, padding: '15px', fontSize: '16px', letterSpacing: '1px' }}
                 >
-                  Iniciar Descarga
+                  {isDownloading ? 'PROCESANDO...' : 'INICIAR DESCARGA'}
                 </button>
                 <button 
-                  className="btn-action-legacy btn-cancel-legacy" 
+                  className="btn btn-secondary" 
                   onClick={handleCancelDownload}
                   disabled={!isDownloading}
+                  style={{ flex: 1 }}
                 >
                   Cancelar
                 </button>
               </div>
 
               {/* Log de Descarga */}
-              <div className="form-group-legacy" style={{ marginTop: '10px' }}>
-                <label>Log de Descarga:</label>
-                <div className="log-box-legacy">
+              <div className="form-group" style={{ marginTop: '30px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <label style={{ margin: 0, color: 'var(--text-muted)' }}>Registro de Actividad:</label>
+                  <button className="btn btn-secondary" onClick={() => setLogs(['[Sistema] Log limpiado.'])} style={{ padding: '4px 8px', fontSize: '12px' }}>
+                    Limpiar Log
+                  </button>
+                </div>
+                <div style={{ 
+                  background: '#050508', 
+                  border: '1px solid var(--border-color)', 
+                  borderRadius: '6px', 
+                  padding: '12px',
+                  height: '120px',
+                  overflowY: 'auto',
+                  fontFamily: 'monospace',
+                  fontSize: '12px',
+                  color: 'var(--success)'
+                }}>
                   {logs.map((log, idx) => (
-                    <div key={idx} className="log-line-legacy">{log}</div>
+                    <div key={idx} style={{ marginBottom: '4px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '2px' }}>{log}</div>
                   ))}
                 </div>
-              </div>
-
-              {/* Botones de acción del Log */}
-              <div className="log-actions-row-legacy">
-                <button className="btn-log-legacy" onClick={() => setLogs(['[Sistema] Log limpiado.'])}>
-                  Limpiar Log
-                </button>
-                <button className="btn-log-legacy" onClick={handleAbrirUbicacion}>
-                  Abrir ubicación
-                </button>
               </div>
             </div>
           </div>
