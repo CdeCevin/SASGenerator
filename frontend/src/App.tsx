@@ -27,10 +27,10 @@ type TabType = 'remover' | 'meme' | 'downloader';
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('meme');
   const [apiUrl] = useState<string>(() => {
-    return localStorage.getItem('hf_space_url') || import.meta.env.VITE_API_URL || '';
+    return localStorage.getItem('hf_space_url') || import.meta.env.VITE_API_URL || 'https://cdecevin-sasgenerator.hf.space';
   });
   const [downloaderUrl] = useState<string>(() => {
-    return localStorage.getItem('hf_downloader_url') || import.meta.env.VITE_DOWNLOADER_API_URL || '';
+    return localStorage.getItem('hf_downloader_url') || import.meta.env.VITE_DOWNLOADER_API_URL || 'https://cdecevin-sasdownloader.hf.space';
   });
   // --- Estados del Descargador ---
   const [ytUrl, setYtUrl] = useState<string>('');
@@ -273,7 +273,7 @@ export default function App() {
     }
 
     if (!downloaderUrl) {
-      setDownloadError('Configura primero la URL del servidor de descargas en Ajustes.');
+      setDownloadError('Configura la variable de entorno VITE_DOWNLOADER_API_URL para el servidor de descargas.');
       return;
     }
 
@@ -308,7 +308,7 @@ export default function App() {
     if (!ytUrl.trim()) return;
 
     if (!downloaderUrl) {
-      setDownloadError('Configura la URL del servidor de descargas en Ajustes.');
+      setDownloadError('Configura la variable de entorno VITE_DOWNLOADER_API_URL para el servidor de descargas.');
       return;
     }
 
