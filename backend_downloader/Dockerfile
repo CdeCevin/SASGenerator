@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM python:3.11-slim-bookworm
 
 # Configurar variables de entorno y evitar prompts interactivos
 ENV PYTHONUNBUFFERED=1 \

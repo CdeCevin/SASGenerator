@@ -35,7 +35,7 @@ def fetch_formats(url: str = Query(..., description="URL del video de YouTube u 
             'quiet': True,
             'no_warnings': True,
             'nocheckcertificate': True,
-            'impersonate': ImpersonateTarget.from_str('chrome-110'),
+            'impersonate': ImpersonateTarget.from_str('chrome'),
             'extractor_args': {
                 'youtube': {
                     'player_client': ['ios', 'android', 'tv', '-web', '-mweb', '-web_safari']
@@ -93,7 +93,7 @@ def download_video(
         'quiet': True,
         'no_warnings': True,
         'nocheckcertificate': True,
-        'impersonate': ImpersonateTarget.from_str('chrome-110'),
+        'impersonate': ImpersonateTarget.from_str('chrome'),
         'extractor_args': {
             'youtube': {
                 'player_client': ['ios', 'android', 'tv', '-web', '-mweb', '-web_safari']
