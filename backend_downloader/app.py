@@ -15,6 +15,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"]
 )
 
 # Carpeta temporal dentro del contenedor Linux para almacenar descargas
@@ -244,16 +245,19 @@ def fetch_formats(url: str = Query(..., description="URL del video de YouTube u 
             'quiet': True,
             'no_warnings': True,
             'nocheckcertificate': True,
-            'impersonate': ImpersonateTarget.from_str('chrome'),
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['android', 'ios', 'tv', '-web', '-mweb', '-web_safari']
-                }
-            }
+            'impersonate': ImpersonateTarget.from_str('chrome')
         }
         
         if os.path.exists(COOKIES_PATH):
             ydl_opts['cookiefile'] = COOKIES_PATH
+            # Con cookies podemos usar el cliente web por defecto para obtener todas las calidades
+        else:
+            # Sin cookies, evitamos clientes web para no gatillar bot checks
+            ydl_opts['extractor_args'] = {
+                'youtube': {
+                    'player_client': ['android', 'ios', 'tv', '-web', '-mweb', '-web_safari']
+                }
+            }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             resolutions = set()
@@ -305,16 +309,19 @@ def download_video(
         'quiet': True,
         'no_warnings': True,
         'nocheckcertificate': True,
-        'impersonate': ImpersonateTarget.from_str('chrome'),
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'ios', 'tv', '-web', '-mweb', '-web_safari']
-            }
-        }
+        'impersonate': ImpersonateTarget.from_str('chrome')
     }
     
     if os.path.exists(COOKIES_PATH):
         ydl_opts['cookiefile'] = COOKIES_PATH
+        # Con cookies podemos usar el cliente web por defecto
+    else:
+        # Sin cookies, evitamos clientes web
+        ydl_opts['extractor_args'] = {
+            'youtube': {
+                'player_client': ['android', 'ios', 'tv', '-web', '-mweb', '-web_safari']
+            }
+        }
 
     # 3. Configurar calidades y codecs
     final_extension = ''
