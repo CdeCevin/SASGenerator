@@ -343,11 +343,20 @@ export default function App() {
           } else if (activeTab === 'meme') {
             const reader = new FileReader();
             reader.onload = (ev) => {
-              addImageLayer(
-                ev.target?.result as string,
-                'Imagen pegada',
-                { x: canvasWidth / 2 - 200, y: canvasHeight / 2 - 200 }
-              );
+              const dataUrl = ev.target?.result as string;
+              const img = new Image();
+              img.src = dataUrl;
+              img.onload = () => {
+                const naturalW = img.naturalWidth || img.width;
+                const naturalH = img.naturalHeight || img.height;
+                const hasImageLayers = layers.some(l => l.type === 'image');
+                if (!hasImageLayers) {
+                  setCanvasWidth(naturalW);
+                  setCanvasHeight(naturalH);
+                  setPreset('custom');
+                }
+                addImageLayer(dataUrl, 'Imagen pegada', undefined, naturalW, naturalH);
+              };
             };
             reader.readAsDataURL(file);
           }
@@ -581,17 +590,21 @@ export default function App() {
   const addImageLayer = (
     imageUrl: string,
     name: string,
-    position?: { x: number; y: number }
+    position?: { x: number; y: number },
+    imgW?: number,
+    imgH?: number
   ) => {
     saveHistory(layers);
+    const w = imgW ?? 400;
+    const h = imgH ?? 400;
     const newLayer: Layer = {
       id: `img_${layerCounter}`,
       type: 'image',
       name,
-      x: position?.x ?? canvasWidth / 2 - 200,
-      y: position?.y ?? canvasHeight / 2 - 200,
-      width: 400,
-      height: 400,
+      x: position?.x ?? Math.round(canvasWidth / 2 - w / 2),
+      y: position?.y ?? Math.round(canvasHeight / 2 - h / 2),
+      width: w,
+      height: h,
       rotation: 0,
       zIndex: layers.length + 1,
       imageUrl,
@@ -607,7 +620,21 @@ export default function App() {
     if (files && files[0]) {
       const reader = new FileReader();
       reader.onload = (event) => {
-        addImageLayer(event.target?.result as string, files[0].name);
+        const dataUrl = event.target?.result as string;
+        const img = new Image();
+        img.src = dataUrl;
+        img.onload = () => {
+          const naturalW = img.naturalWidth || img.width;
+          const naturalH = img.naturalHeight || img.height;
+          // Si el lienzo está vacío (sin capas de imagen), ajustar el canvas
+          const hasImageLayers = layers.some(l => l.type === 'image');
+          if (!hasImageLayers) {
+            setCanvasWidth(naturalW);
+            setCanvasHeight(naturalH);
+            setPreset('custom');
+          }
+          addImageLayer(dataUrl, files[0].name, undefined, naturalW, naturalH);
+        };
       };
       reader.readAsDataURL(files[0]);
     }
@@ -780,10 +807,19 @@ export default function App() {
     if (files && files[0]) {
       const reader = new FileReader();
       reader.onload = (event) => {
+        const dataUrl = event.target?.result as string;
         setCanvasBackground({
           type: 'image',
-          value: event.target?.result as string,
+          value: dataUrl,
         });
+
+        const img = new Image();
+        img.src = dataUrl;
+        img.onload = () => {
+          setCanvasWidth(img.naturalWidth || img.width);
+          setCanvasHeight(img.naturalHeight || img.height);
+          setPreset('custom');
+        };
       };
       reader.readAsDataURL(files[0]);
     }
