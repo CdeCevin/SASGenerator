@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
+import { Sandbox } from './pages/Sandbox';
 
 interface Layer {
   id: string;
@@ -26,6 +27,9 @@ type TabType = 'remover' | 'meme' | 'downloader';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('meme');
+  const [showSandbox, setShowSandbox] = useState<boolean>(() => {
+    return new URLSearchParams(window.location.search).get('sandbox') === '1';
+  });
   const [apiUrl] = useState<string>(() => {
     return localStorage.getItem('hf_space_url') || import.meta.env.VITE_API_URL || 'https://cdecevin-sasgenerator.hf.space';
   });
@@ -992,30 +996,42 @@ export default function App() {
 
         <div className="header-actions">
           <nav className="tabs-header">
-            <button 
+            <button
               className={`tab-btn ${activeTab === 'meme' ? 'active' : ''}`}
               onClick={() => setActiveTab('meme')}
             >
               Generador de Memes
             </button>
-            <button 
+            <button
               className={`tab-btn ${activeTab === 'remover' ? 'active' : ''}`}
               onClick={() => setActiveTab('remover')}
             >
               Quitar Fondo
             </button>
-            <button 
+            <button
               className={`tab-btn ${activeTab === 'downloader' ? 'active' : ''}`}
               onClick={() => setActiveTab('downloader')}
             >
               Descargador
             </button>
           </nav>
-          
+          <button
+            className={`tab-btn ${showSandbox ? 'active' : ''}`}
+            onClick={() => setShowSandbox(v => !v)}
+            title="Toggle Design System sandbox"
+          >
+            {showSandbox ? '← Volver a la app' : '🎨 Sandbox'}
+          </button>
+
         </div>
       </header>
 
-      <main className="main-content">
+      {showSandbox ? (
+        <main className="main-content">
+          <Sandbox />
+        </main>
+      ) : (
+        <main className="main-content">
         {/* --- PESTAÑA: QUITAR FONDO --- */}
         {activeTab === 'remover' && (
           <div className="bg-remover-container animate-fade-in">
@@ -1638,6 +1654,7 @@ export default function App() {
           </div>
         )}
       </main>
+      )}
     </div>
   );
 }

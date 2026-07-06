@@ -1,38 +1,113 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ============================================================
+   Studio palette — semantic tokens for shadcn/ui components
+   ============================================================ */
 :root {
+  --background: #0B0D12;
+  --foreground: #E5E7EB;
+
+  --card: #14171F;
+  --card-foreground: #E5E7EB;
+
+  --popover: #14171F;
+  --popover-foreground: #E5E7EB;
+
+  --primary: #7C6CF6;
+  --primary-foreground: #FFFFFF;
+
+  --secondary: #22D3EE;
+  --secondary-foreground: #0B0D12;
+
+  --muted: #1A1E29;
+  --muted-foreground: #9CA3AF;
+
+  --accent: #1A1E29;
+  --accent-foreground: #E5E7EB;
+
+  --destructive: #ef4444;
+  --destructive-foreground: #FFFFFF;
+
+  --border: rgba(255, 255, 255, 0.06);
+  --input: rgba(255, 255, 255, 0.08);
+  --ring: #7C6CF6;
+
+  --radius: 0.5rem;
+
+  /* Legacy tokens kept for compatibility with current code */
+  --bg-main: #0B0D12;
+  --bg-card: #14171F;
+  --bg-card-hover: #1A1E29;
+  --border-color: rgba(255, 255, 255, 0.06);
+  --border-focus: rgba(124, 108, 246, 0.5);
+
+  --primary-hover: #9089F8;
+  --primary-glow: rgba(124, 108, 246, 0.3);
+
+  --secondary-hover: #67E8F9;
+
+  --text-primary: #E5E7EB;
+  --text-secondary: #9CA3AF;
+  --text-muted: #6B7280;
+
+  --success: #10b981;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-
   color-scheme: dark;
-  color: #e2e8f0;
-  background-color: #090a0f;
-
+  color: var(--foreground);
+  background-color: var(--background);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
 
-  /* Color Palette */
-  --bg-main: #07080c;
-  --bg-card: rgba(20, 22, 33, 0.7);
-  --bg-card-hover: rgba(28, 31, 46, 0.85);
-  --border-color: rgba(255, 255, 255, 0.08);
-  --border-focus: rgba(139, 92, 246, 0.5);
-  
-  --primary: #8b5cf6;
-  --primary-hover: #a78bfa;
-  --primary-glow: rgba(139, 92, 246, 0.3);
-  
-  --accent: #572364;
-  --accent-hover: #723282;
-  
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  
-  --success: #10b981;
-  --danger: #ef4444;
-  --warning: #f59e0b;
+/* ============================================================
+   Tailwind v4 theme mapping — exposes CSS vars as utilities
+   ============================================================ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
 * {
@@ -45,10 +120,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: var(--bg-main);
-  background-image: 
-    radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.05) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, rgba(87, 35, 100, 0.08) 0px, transparent 50%);
+  background-color: var(--background);
   overflow-x: hidden;
 }
 
@@ -57,16 +129,13 @@ body {
   width: 8px;
   height: 8px;
 }
-
 ::-webkit-scrollbar-track {
   background: #0b0c10;
 }
-
 ::-webkit-scrollbar-thumb {
   background: #252836;
   border-radius: 4px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
   background: #3b3f54;
 }
@@ -76,16 +145,13 @@ body {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
-
 @keyframes pulseGlow {
-  0%, 100% { box-shadow: 0 0 15px rgba(139, 92, 246, 0.2); }
-  50% { box-shadow: 0 0 25px rgba(139, 92, 246, 0.4); }
+  0%, 100% { box-shadow: 0 0 15px rgba(124, 108, 246, 0.2); }
+  50% { box-shadow: 0 0 25px rgba(124, 108, 246, 0.4); }
 }
-
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
-
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
@@ -94,14 +160,13 @@ body {
 .animate-fade-in {
   animation: fadeIn 0.4s ease-out forwards;
 }
-
 .animate-spin-slow {
   animation: spin 8s linear infinite;
 }
 
 /* Dark Checkered Pattern for Transparency */
 .transparency-pattern {
-  background-image: 
+  background-image:
     linear-gradient(45deg, rgba(255, 255, 255, 0.03) 25%, transparent 25%),
     linear-gradient(-45deg, rgba(255, 255, 255, 0.03) 25%, transparent 25%),
     linear-gradient(45deg, transparent 75%, rgba(255, 255, 255, 0.03) 75%),
@@ -110,36 +175,34 @@ body {
   background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
   background-color: #0f111a;
   border-radius: 8px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
 }
 
-/* Custom Download Progress State */
+/* Download Progress (legacy, to migrate in Fase 1) */
 .download-progress-overlay {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 15px;
-  background: rgba(139, 92, 246, 0.1);
-  border: 1px solid rgba(139, 92, 246, 0.3);
+  background: rgba(124, 108, 246, 0.1);
+  border: 1px solid rgba(124, 108, 246, 0.3);
   padding: 15px 20px;
   border-radius: 8px;
   margin: 15px 0;
   animation: pulseGlow 2s infinite;
 }
-
 .spinner-glow {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  border: 3px solid rgba(139, 92, 246, 0.3);
+  border: 3px solid rgba(124, 108, 246, 0.3);
   border-top-color: var(--primary);
   animation: spin 1s linear infinite;
   box-shadow: 0 0 10px var(--primary-glow);
 }
-
 .progress-text {
   color: var(--primary-hover);
   font-weight: 600;
   font-size: 15px;
-  text-shadow: 0 0 8px rgba(139, 92, 246, 0.4);
+  text-shadow: 0 0 8px rgba(124, 108, 246, 0.4);
 }
