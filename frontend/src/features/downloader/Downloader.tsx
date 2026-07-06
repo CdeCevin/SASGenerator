@@ -1,19 +1,42 @@
 import { useRef, useState } from "react"
-import { Download, Loader2, AlertCircle, CheckCircle2, X } from "lucide-react"
+import {
+  Download,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  X,
+  Link2,
+  Video,
+  Music2,
+  FileText,
+  Sparkles,
+} from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { cn } from "@/lib/utils"
 
 type DownloadFormat = "Video" | "Audio"
 
 interface DownloaderProps {
   apiUrl: string
 }
+
+interface FormatOption {
+  value: DownloadFormat
+  label: string
+  sublabel: string
+  icon: typeof Video
+}
+
+const FORMAT_OPTIONS: FormatOption[] = [
+  { value: "Video", label: "Video", sublabel: "MP4", icon: Video },
+  { value: "Audio", label: "Solo Audio", sublabel: "MP3", icon: Music2 },
+]
 
 export function Downloader({ apiUrl }: DownloaderProps) {
   const [ytUrl, setYtUrl] = useState<string>("")
@@ -153,46 +176,49 @@ export function Downloader({ apiUrl }: DownloaderProps) {
   }
 
   const isBusy = isDownloading || isFetchingFormats
+  const hasUrl = ytUrl.trim().length > 0
 
   return (
-    <div className="w-full max-w-5xl mx-auto p-4 sm:p-6 animate-fade-in">
+    <div className="w-full max-w-4xl mx-auto p-4 sm:p-6 animate-fade-in">
       <Card>
-        <CardHeader className="pb-6">
+        <CardHeader className="pb-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-primary/10 p-2.5">
+            <div className="rounded-xl bg-primary/10 p-2.5">
               <Download className="size-6 text-primary" />
             </div>
             <div>
               <CardTitle className="text-2xl">SAS Downloader</CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
+              <p className="text-sm text-muted-foreground mt-0.5">
                 Descarga videos y audio de YouTube en alta calidad
               </p>
             </div>
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-6">
-          {/* URL — full width, prominent */}
-          <div className="space-y-2">
-            <Label htmlFor="yt-url" className="text-sm">
+        <CardContent className="space-y-3">
+          {/* URL Tile */}
+          <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
+            <Label htmlFor="yt-url" className="text-xs uppercase tracking-wider text-muted-foreground">
               URL del video
             </Label>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Input
-                id="yt-url"
-                type="text"
-                placeholder="https://www.youtube.com/watch?v=..."
-                value={ytUrl}
-                onChange={(e) => setYtUrl(e.target.value)}
-                disabled={isBusy}
-                className="flex-1 h-12 text-base"
-              />
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="relative flex-1">
+                <Link2 className="absolute left-3.5 top-1/2 -translate-y-1/2 size-5 text-muted-foreground pointer-events-none" />
+                <Input
+                  id="yt-url"
+                  type="text"
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  value={ytUrl}
+                  onChange={(e) => setYtUrl(e.target.value)}
+                  disabled={isBusy}
+                  className="h-12 pl-11 text-base"
+                />
+              </div>
               <Button
                 variant="secondary"
-                size="lg"
                 onClick={handleFetchFormats}
                 disabled={isBusy || !ytUrl.trim()}
-                className="h-12 px-6"
+                className="h-12 px-5"
               >
                 {isFetchingFormats ? (
                   <>
@@ -200,45 +226,60 @@ export function Downloader({ apiUrl }: DownloaderProps) {
                     Cargando
                   </>
                 ) : (
-                  "Cargar resoluciones"
+                  <>
+                    <Sparkles />
+                    Cargar resoluciones
+                  </>
                 )}
               </Button>
             </div>
           </div>
 
-          {/* Format + Quality — 2 columns */}
-          <div className="grid sm:grid-cols-2 gap-6">
-            <div className="space-y-3">
-              <Label className="text-sm">Formato de descarga</Label>
-              <RadioGroup
-                value={downloadFormat}
-                onValueChange={(v) => setDownloadFormat(v as DownloadFormat)}
-                disabled={isDownloading}
-                className="space-y-3"
-              >
-                <div className="flex items-center gap-3">
-                  <RadioGroupItem value="Video" id="fmt-video" className="size-5" />
-                  <Label
-                    htmlFor="fmt-video"
-                    className="font-normal normal-case tracking-normal text-base cursor-pointer"
-                  >
-                    Video (MP4)
-                  </Label>
-                </div>
-                <div className="flex items-center gap-3">
-                  <RadioGroupItem value="Audio" id="fmt-audio" className="size-5" />
-                  <Label
-                    htmlFor="fmt-audio"
-                    className="font-normal normal-case tracking-normal text-base cursor-pointer"
-                  >
-                    Solo Audio (MP3)
-                  </Label>
-                </div>
-              </RadioGroup>
+          {/* Format + Quality Tile (2 columns) */}
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                Formato de descarga
+              </Label>
+              <div className="grid grid-cols-2 gap-2">
+                {FORMAT_OPTIONS.map((opt) => {
+                  const Icon = opt.icon
+                  const isSelected = downloadFormat === opt.value
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setDownloadFormat(opt.value)}
+                      disabled={isDownloading}
+                      className={cn(
+                        "flex flex-col items-start gap-1 rounded-lg border-2 p-3 text-left transition-all",
+                        "hover:border-primary/50 hover:bg-primary/5",
+                        "disabled:opacity-50 disabled:cursor-not-allowed",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+                        isSelected
+                          ? "border-primary bg-primary/10"
+                          : "border-border bg-card"
+                      )}
+                    >
+                      <Icon
+                        className={cn(
+                          "size-5",
+                          isSelected ? "text-primary" : "text-muted-foreground"
+                        )}
+                      />
+                      <span className="text-sm font-semibold">{opt.label}</span>
+                      <span className="text-xs text-muted-foreground">{opt.sublabel}</span>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
 
-            <div className="space-y-3">
-              <Label htmlFor="quality" className="text-sm">
+            <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
+              <Label
+                htmlFor="quality"
+                className="text-xs uppercase tracking-wider text-muted-foreground"
+              >
                 Calidad
               </Label>
               <Select
@@ -263,20 +304,26 @@ export function Downloader({ apiUrl }: DownloaderProps) {
             </div>
           </div>
 
-          {/* Custom name */}
-          <div className="space-y-2">
-            <Label htmlFor="custom-name" className="text-sm">
-              Nombre del archivo (opcional)
+          {/* Filename Tile */}
+          <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
+            <Label
+              htmlFor="custom-name"
+              className="text-xs uppercase tracking-wider text-muted-foreground"
+            >
+              Nombre del archivo <span className="text-muted-foreground/60">(opcional)</span>
             </Label>
-            <Input
-              id="custom-name"
-              type="text"
-              placeholder="ej: video-epico (se usará el título original si lo omites)"
-              value={customFileName}
-              onChange={(e) => setCustomFileName(e.target.value)}
-              disabled={isDownloading}
-              className="h-12 text-base"
-            />
+            <div className="relative">
+              <FileText className="absolute left-3.5 top-1/2 -translate-y-1/2 size-5 text-muted-foreground pointer-events-none" />
+              <Input
+                id="custom-name"
+                type="text"
+                placeholder="ej: video-epico (se usará el título original si lo omites)"
+                value={customFileName}
+                onChange={(e) => setCustomFileName(e.target.value)}
+                disabled={isDownloading}
+                className="h-12 pl-11 text-base"
+              />
+            </div>
           </div>
 
           {/* Error */}
@@ -287,28 +334,37 @@ export function Downloader({ apiUrl }: DownloaderProps) {
             </Alert>
           )}
 
-          {/* Status */}
+          {/* Status Tile */}
           {isBusy ? (
-            <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/10 p-4">
+            <div className="rounded-xl border border-primary/30 bg-primary/10 p-4 flex items-center gap-3">
               <Loader2 className="size-5 animate-spin text-primary" />
               <span className="text-base font-medium text-primary">
                 {isDownloading ? downloadStatus : "Buscando formatos disponibles..."}
               </span>
             </div>
+          ) : hasUrl ? (
+            <div className="rounded-xl border border-[color:var(--success)]/30 bg-[color:var(--success)]/10 p-4 flex items-center gap-3">
+              <CheckCircle2 className="size-5 text-[color:var(--success)]" />
+              <span className="text-base font-semibold text-[color:var(--success)]">
+                ¡Listo para descargar!
+              </span>
+            </div>
           ) : (
-            <div className="flex items-center gap-2 text-base font-semibold text-[color:var(--success)]">
-              <CheckCircle2 className="size-5" />
-              ¡Listo para descargar!
+            <div className="rounded-xl border border-border bg-muted/30 p-4 flex items-center gap-3">
+              <Link2 className="size-5 text-muted-foreground" />
+              <span className="text-base text-muted-foreground">
+                Pega una URL de YouTube para comenzar.
+              </span>
             </div>
           )}
 
           {/* Actions */}
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
             <Button
-              size="xl"
               onClick={handleDownload}
               disabled={isBusy || !ytUrl.trim()}
-              className="flex-[3] h-14 text-lg tracking-wider"
+              className="flex-[3] h-12 text-base font-semibold"
+              size="lg"
             >
               {isDownloading ? (
                 <>
@@ -318,7 +374,7 @@ export function Downloader({ apiUrl }: DownloaderProps) {
               ) : (
                 <>
                   <Download className="size-5" />
-                  INICIAR DESCARGA
+                  Iniciar descarga
                 </>
               )}
             </Button>
@@ -326,7 +382,7 @@ export function Downloader({ apiUrl }: DownloaderProps) {
               variant="destructive"
               onClick={handleCancelDownload}
               disabled={!isDownloading}
-              className="flex-1 h-14 text-base"
+              className="flex-1 h-12"
             >
               <X className="size-5" />
               Cancelar
