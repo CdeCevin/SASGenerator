@@ -223,7 +223,7 @@ export default function App() {
     if (!expandedLayerId) return;
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
-      if (target?.closest('.layer-properties')) return;
+      if (target?.closest('.layer-properties-panel')) return;
       if (target?.closest('.layer-menu-toggle')) return;
       setExpandedLayerId(null);
     };
@@ -734,6 +734,7 @@ export default function App() {
   };
 
   const selectedLayer = layers.find(l => l.id === selectedLayerId);
+  const expandedLayer = layers.find(l => l.id === expandedLayerId);
 
   // -------------------------------------------------------------
   // --- MATEMÁTICAS DE ARRASTRE, REDIMENSIONADO Y ROTACIÓN ---
@@ -1553,25 +1554,44 @@ export default function App() {
                               <Trash2 className="size-4" />
                             </button>
                           </div>
-
-                          {expandedLayerId === layer.id && (
-                            <LayerPropertiesPanel
-                              layer={layer}
-                              onUpdate={(updates) => {
-                                setLayers((prev) =>
-                                  prev.map((l) => (l.id === layer.id ? { ...l, ...updates } : l))
-                                );
-                              }}
-                            />
-                          )}
                         </div>
                       );
                     })}
-                   </div>
-                 )}
-               </div>
+                    </div>
+                  )}
+                </div>
 
-               {/* Botones de acción del Lienzo */}
+                {/* Propiedades de la capa expandida (trigger: flecha en el item) */}
+                {expandedLayer && (
+                  <div
+                    className="sidebar-section layer-properties-panel animate-fade-in"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="layer-properties-header">
+                      <span className="section-title" style={{ color: 'var(--primary-hover)' }}>
+                        Propiedades — {expandedLayer.name}
+                      </span>
+                      <button
+                        className="icon-btn"
+                        onClick={() => setExpandedLayerId(null)}
+                        title="Cerrar propiedades"
+                        aria-label="Cerrar propiedades"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <LayerPropertiesPanel
+                      layer={expandedLayer}
+                      onUpdate={(updates) => {
+                        setLayers((prev) =>
+                          prev.map((l) => (l.id === expandedLayer.id ? { ...l, ...updates } : l))
+                        );
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* Botones de acción del Lienzo */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: 'auto', paddingTop: '15px', borderTop: '1px solid var(--border-color)' }}>
                 <button className="btn btn-accent" onClick={handleExportMeme} disabled={layers.length === 0}>
                   Exportar Meme (PNG)
