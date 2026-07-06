@@ -131,14 +131,18 @@ def diagnose(url: str = Query(...)):
 @app.get("/fetch-formats")
 def fetch_formats(url: str = Query(..., description="URL del video de YouTube u otro portal")):
     """Obtiene los formatos y resoluciones de video disponibles."""
-    # Para LISTAR formatos: android reporta todos los streams DASH (hasta 4K).
-    # android_vr y tv_embedded funcionan bien para DESCARGAR pero listan menos formatos.
+    # Impersonate Chrome a nivel TLS para evitar detección de bot.
+    # Sin esto, las peticiones parecen Python puro y YouTube las bloquea.
+    chrome = ImpersonateTarget.from_str('chrome')
     strategies = [
         {'quiet': True, 'no_warnings': True, 'nocheckcertificate': True,
+         'impersonate': chrome,
          'extractor_args': {'youtube': {'player_client': ['android', 'ios']}}},
         {'quiet': True, 'no_warnings': True, 'nocheckcertificate': True,
+         'impersonate': chrome,
          'extractor_args': {'youtube': {'player_client': ['android_vr', 'tv_embedded']}}},
         {'quiet': True, 'no_warnings': True, 'nocheckcertificate': True,
+         'impersonate': chrome,
          'extractor_args': {'youtube': {'player_client': ['tv', 'android_vr']}}},
     ]
 
@@ -205,14 +209,14 @@ def download_video(
         merge_fmt = None
         final_extension = '.mp3'
 
-    # Estrategias en orden de preferencia. NUNCA usar cliente web de YouTube sin cookies
-    # porque siempre devuelve "Sign in to confirm you're not a bot".
-    # android_vr y tv_embedded bypasean esta restricción consistentemente.
+    # Impersonate Chrome a nivel TLS — clave para evitar detección de bot sin cookies
+    chrome = ImpersonateTarget.from_str('chrome')
     base_opts = {
         'outtmpl': output_template,
         'quiet': True,
         'no_warnings': True,
         'nocheckcertificate': True,
+        'impersonate': chrome,
         'format': format_str,
     }
     if merge_fmt:
