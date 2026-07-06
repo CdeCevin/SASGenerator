@@ -176,32 +176,32 @@ export function Downloader({ apiUrl, formUrl, onFormUrlChange }: DownloaderProps
   const hasUrl = ytUrl.trim().length > 0
 
   return (
-    <div className="w-full max-w-4xl mx-auto p-4 sm:p-6 md:p-8 animate-fade-in flex justify-center">
+    <div className="downloader-wrapper animate-fade-in">
       {/* Contenedor Principal (Tarjeta) */}
-      <div className="w-full border border-border bg-card rounded-xl text-card-foreground shadow-lg flex flex-col overflow-hidden">
+      <div className="downloader-card">
         {/* Cabecera */}
-        <div className="p-6 border-b border-border/50 flex items-center gap-3">
-          <div className="rounded-xl bg-primary/10 p-2.5">
-            <Download className="size-6 text-primary" />
+        <div className="downloader-header">
+          <div className="downloader-format-icon-box" style={{ background: 'rgba(124, 108, 246, 0.1)', color: 'var(--primary)', padding: '10px' }}>
+            <Download className="size-6" />
           </div>
           <div>
-            <h2 className="text-xl sm:text-2xl font-bold text-foreground">SAS Downloader</h2>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+            <h2 className="text-xl sm:text-2xl font-bold text-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>SAS Downloader</h2>
+            <p className="text-xs sm:text-sm text-muted-foreground" style={{ marginTop: '4px' }}>
               Descarga videos y audio de YouTube en alta calidad
             </p>
           </div>
         </div>
 
         {/* Formulario */}
-        <div className="p-6 sm:p-8 flex flex-col gap-6">
+        <div className="downloader-form">
           {/* URL Input Row */}
-          <div className="flex flex-col gap-2">
-            <label htmlFor="yt-url" className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+          <div className="downloader-field-group">
+            <label htmlFor="yt-url">
               URL del video
             </label>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <Link2 className="absolute left-3.5 top-1/2 -translate-y-1/2 size-5 text-muted-foreground pointer-events-none" />
+            <div className="downloader-input-row">
+              <div className="downloader-input-wrapper">
+                <Link2 className="downloader-input-icon" />
                 <input
                   id="yt-url"
                   type="text"
@@ -209,14 +209,14 @@ export function Downloader({ apiUrl, formUrl, onFormUrlChange }: DownloaderProps
                   value={ytUrl}
                   onChange={(e) => setYtUrl(e.target.value)}
                   disabled={isBusy}
-                  className="h-12 pl-11 pr-4 py-2 w-full rounded-lg border border-border bg-muted/40 text-base text-foreground placeholder:text-muted-foreground transition-colors focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="downloader-text-input"
                 />
               </div>
               <button
                 type="button"
                 onClick={handleFetchFormats}
                 disabled={isBusy || !ytUrl.trim()}
-                className="h-12 px-5 font-semibold text-sm bg-muted border border-border hover:bg-muted/80 text-foreground rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                className="downloader-btn-fetch"
               >
                 {isFetchingFormats ? (
                   <>
@@ -234,13 +234,13 @@ export function Downloader({ apiUrl, formUrl, onFormUrlChange }: DownloaderProps
           </div>
 
           {/* Format and Quality Row */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Format Selection (col-span-2) */}
-            <div className="md:col-span-2 flex flex-col gap-2">
-              <label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+          <div className="downloader-grid-formats">
+            {/* Format Selection */}
+            <div className="downloader-field-group">
+              <label>
                 Formato de descarga
               </label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="downloader-formats-subgrid">
                 {FORMAT_OPTIONS.map((opt) => {
                   const Icon = opt.icon
                   const isSelected = downloadFormat === opt.value
@@ -251,24 +251,16 @@ export function Downloader({ apiUrl, formUrl, onFormUrlChange }: DownloaderProps
                       onClick={() => setDownloadFormat(opt.value)}
                       disabled={isDownloading}
                       className={cn(
-                        "flex items-center gap-3.5 rounded-lg border p-3 text-left transition-all h-14 cursor-pointer",
-                        "hover:border-primary/50 hover:bg-primary/5",
-                        "disabled:opacity-50 disabled:cursor-not-allowed",
-                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                        isSelected
-                          ? "border-primary bg-primary/10 text-foreground"
-                          : "border-border bg-muted/40 text-muted-foreground"
+                        "downloader-format-btn",
+                        isSelected && "active"
                       )}
                     >
-                      <div className={cn(
-                        "p-1.5 rounded-md shrink-0",
-                        isSelected ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
-                      )}>
+                      <div className="downloader-format-icon-box">
                         <Icon className="size-5" />
                       </div>
-                      <div className="flex flex-col leading-tight">
-                        <span className="text-sm font-bold text-foreground">{opt.label}</span>
-                        <span className="text-xs text-muted-foreground">{opt.sublabel}</span>
+                      <div className="downloader-format-text-box">
+                        <span className="title">{opt.label}</span>
+                        <span className="subtitle">{opt.sublabel}</span>
                       </div>
                     </button>
                   )
@@ -276,12 +268,9 @@ export function Downloader({ apiUrl, formUrl, onFormUrlChange }: DownloaderProps
               </div>
             </div>
 
-            {/* Quality Select (col-span-1) */}
-            <div className="flex flex-col gap-2">
-              <label
-                htmlFor="quality"
-                className="text-xs uppercase tracking-wider text-muted-foreground font-semibold"
-              >
+            {/* Quality Select */}
+            <div className="downloader-field-group">
+              <label htmlFor="quality">
                 Calidad
               </label>
               <select
@@ -289,7 +278,7 @@ export function Downloader({ apiUrl, formUrl, onFormUrlChange }: DownloaderProps
                 value={downloadQuality}
                 onChange={(e) => setDownloadQuality(e.target.value)}
                 disabled={isDownloading || downloadFormat !== "Video"}
-                className="h-14 w-full items-center justify-between rounded-lg border border-border bg-muted/40 px-3 py-2 text-base text-foreground focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50"
+                className="downloader-select"
               >
                 {formats.length > 0 ? (
                   formats.map((fmt) => (
@@ -307,15 +296,12 @@ export function Downloader({ apiUrl, formUrl, onFormUrlChange }: DownloaderProps
           </div>
 
           {/* Filename Input */}
-          <div className="flex flex-col gap-2">
-            <label
-              htmlFor="custom-name"
-              className="text-xs uppercase tracking-wider text-muted-foreground font-semibold"
-            >
-              Nombre del archivo <span className="text-muted-foreground/60">(opcional)</span>
+          <div className="downloader-field-group">
+            <label htmlFor="custom-name">
+              Nombre del archivo <span style={{ textTransform: 'lowercase', opacity: 0.6 }}>(opcional)</span>
             </label>
-            <div className="relative">
-              <FileText className="absolute left-3.5 top-1/2 -translate-y-1/2 size-5 text-muted-foreground pointer-events-none" />
+            <div className="downloader-input-wrapper">
+              <FileText className="downloader-input-icon" />
               <input
                 id="custom-name"
                 type="text"
@@ -323,7 +309,7 @@ export function Downloader({ apiUrl, formUrl, onFormUrlChange }: DownloaderProps
                 value={customFileName}
                 onChange={(e) => setCustomFileName(e.target.value)}
                 disabled={isDownloading}
-                className="h-12 pl-11 pr-4 py-2 w-full rounded-lg border border-border bg-muted/40 text-base text-foreground placeholder:text-muted-foreground transition-colors focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50"
+                className="downloader-text-input"
               />
             </div>
           </div>
@@ -338,35 +324,35 @@ export function Downloader({ apiUrl, formUrl, onFormUrlChange }: DownloaderProps
 
           {/* Status Box */}
           {isBusy ? (
-            <div className="rounded-xl border border-primary/30 bg-primary/10 p-4 flex items-center gap-3 animate-pulse">
-              <Loader2 className="size-5 animate-spin text-primary shrink-0" />
-              <span className="text-sm sm:text-base font-medium text-primary">
+            <div className="downloader-status-box busy animate-pulse">
+              <Loader2 className="size-5 animate-spin shrink-0" />
+              <span className="font-medium">
                 {isDownloading ? downloadStatus : "Buscando formatos disponibles..."}
               </span>
             </div>
           ) : hasUrl ? (
-            <div className="rounded-xl border border-[color:var(--success)]/30 bg-[color:var(--success)]/10 p-4 flex items-center gap-3">
-              <CheckCircle2 className="size-5 text-[color:var(--success)] shrink-0" />
-              <span className="text-sm sm:text-base font-semibold text-[color:var(--success)]">
+            <div className="downloader-status-box ready">
+              <CheckCircle2 className="size-5 shrink-0" />
+              <span className="font-semibold">
                 ¡Listo para descargar!
               </span>
             </div>
           ) : (
-            <div className="rounded-xl border border-border bg-muted/20 p-4 flex items-center gap-3">
-              <Link2 className="size-5 text-muted-foreground shrink-0" />
-              <span className="text-sm sm:text-base text-muted-foreground">
+            <div className="downloader-status-box empty">
+              <Link2 className="size-5 shrink-0" />
+              <span>
                 Pega una URL de YouTube para comenzar.
               </span>
             </div>
           )}
 
           {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+          <div className="downloader-action-row">
             <button
               type="button"
               onClick={handleDownload}
               disabled={isBusy || !ytUrl.trim()}
-              className="flex-[3] h-14 text-base font-bold bg-primary hover:bg-[color:var(--primary-hover)] text-primary-foreground shadow-lg shadow-primary/20 rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="downloader-btn-download"
             >
               {isDownloading ? (
                 <>
@@ -384,7 +370,7 @@ export function Downloader({ apiUrl, formUrl, onFormUrlChange }: DownloaderProps
               type="button"
               onClick={handleCancelDownload}
               disabled={!isDownloading}
-              className="flex-1 h-14 border border-destructive/30 bg-destructive/10 hover:bg-destructive/20 text-destructive-foreground font-semibold rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-colors"
+              className="downloader-btn-cancel"
             >
               <X className="size-5" />
               Cancelar

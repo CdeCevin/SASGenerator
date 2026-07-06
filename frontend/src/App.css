@@ -684,3 +684,327 @@
   padding: 10px;
   overflow: auto;
 }
+
+/* ============================================================
+   SAS Downloader — Custom styles to avoid compilation issues
+   ============================================================ */
+.downloader-wrapper {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 10px;
+  display: flex;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.downloader-card {
+  width: 100%;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.downloader-header {
+  padding: 24px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  box-sizing: border-box;
+}
+
+.downloader-form {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  box-sizing: border-box;
+}
+
+.downloader-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+}
+
+.downloader-field-group label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.downloader-input-row {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .downloader-input-row {
+    flex-direction: column;
+  }
+}
+
+.downloader-input-wrapper {
+  position: relative;
+  flex: 1;
+}
+
+.downloader-input-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+  width: 20px;
+  height: 20px;
+}
+
+.downloader-text-input {
+  width: 100%;
+  height: 48px;
+  padding-left: 44px;
+  padding-right: 16px;
+  background: #090a0f;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 15px;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.downloader-text-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 8px rgba(139, 92, 246, 0.25);
+}
+
+.downloader-btn-fetch {
+  height: 48px;
+  padding: 0 20px;
+  font-weight: 600;
+  font-size: 14px;
+  background: #1e293b;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.downloader-btn-fetch:hover:not(:disabled) {
+  background: #334155;
+}
+
+.downloader-btn-fetch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.downloader-grid-formats {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .downloader-grid-formats {
+    grid-template-columns: 1fr;
+  }
+}
+
+.downloader-formats-subgrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.downloader-format-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-secondary);
+  padding: 12px;
+  height: 56px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.downloader-format-btn:hover:not(:disabled) {
+  border-color: rgba(124, 108, 246, 0.5);
+  background: rgba(124, 108, 246, 0.03);
+}
+
+.downloader-format-btn.active {
+  border-color: var(--primary);
+  background: rgba(124, 108, 246, 0.1);
+  color: #fff;
+}
+
+.downloader-format-icon-box {
+  padding: 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.downloader-format-btn.active .downloader-format-icon-box {
+  background: rgba(124, 108, 246, 0.2);
+  color: var(--primary-hover);
+}
+
+.downloader-format-text-box {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.downloader-format-text-box .title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.downloader-format-text-box .subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.downloader-select {
+  width: 100%;
+  height: 56px;
+  padding: 0 16px;
+  background: #090a0f;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 15px;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.downloader-select:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.downloader-status-box {
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  border: 1px solid transparent;
+  box-sizing: border-box;
+}
+
+.downloader-status-box.busy {
+  border-color: rgba(124, 108, 246, 0.3);
+  background: rgba(124, 108, 246, 0.08);
+  color: var(--primary-hover);
+}
+
+.downloader-status-box.ready {
+  border-color: rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.08);
+  color: var(--success);
+}
+
+.downloader-status-box.empty {
+  border-color: var(--border-color);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-muted);
+}
+
+.downloader-action-row {
+  display: flex;
+  gap: 15px;
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .downloader-action-row {
+    flex-direction: column;
+  }
+}
+
+.downloader-btn-download {
+  flex: 3;
+  height: 56px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: 0 4px 15px rgba(124, 108, 246, 0.2);
+  transition: all 0.2s ease;
+}
+
+.downloader-btn-download:hover:not(:disabled) {
+  background: var(--primary-hover);
+  box-shadow: 0 6px 20px rgba(124, 108, 246, 0.35);
+}
+
+.downloader-btn-download:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.downloader-btn-cancel {
+  flex: 1;
+  height: 56px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--danger);
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.downloader-btn-cancel:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.18);
+}
+
+.downloader-btn-cancel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
