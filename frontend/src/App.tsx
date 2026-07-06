@@ -1667,8 +1667,12 @@ export default function App() {
                     onDragOver={handleCanvasDragOver}
                     onDrop={handleCanvasDrop}
                     style={{
-                      backgroundColor: canvasBackground.type === 'color' ? canvasBackground.value : 'transparent',
-                      backgroundImage: canvasBackground.type === 'image' ? `url(${canvasBackground.value})` : 'none',
+                      backgroundColor: canvasBackground.type === 'color'
+                        ? (canvasBackground.value === 'transparent' ? undefined : canvasBackground.value)
+                        : 'transparent',
+                      backgroundImage: canvasBackground.type === 'image'
+                        ? `url(${canvasBackground.value})`
+                        : (canvasBackground.value === 'transparent' ? undefined : 'none'),
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
                     }}
@@ -2039,7 +2043,7 @@ export default function App() {
                     <div className="color-input-wrapper">
                       <input 
                         type="color" 
-                        value={canvasBackground.type === 'color' ? canvasBackground.value : '#000000'} 
+                        value={canvasBackground.type === 'color' && canvasBackground.value !== 'transparent' ? canvasBackground.value : '#ffffff'} 
                         onChange={(e) => handleBgColorChange(e.target.value)} 
                       />
                       <span>Color</span>
