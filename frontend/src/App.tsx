@@ -833,88 +833,95 @@ export default function App() {
     });
   };
 
+  // Renderiza el meme a un canvas 2D. Compartido por exportar y copiar.
+  const renderMemeToCanvas = async (): Promise<HTMLCanvasElement> => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('No se pudo obtener el contexto 2D del Canvas');
+
+    // 1. Dibujar el fondo
+    if (canvasBackground.type === 'color') {
+      if (canvasBackground.value !== 'transparent') {
+        ctx.fillStyle = canvasBackground.value;
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+      } else {
+        ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+      }
+    } else if (canvasBackground.type === 'image' && canvasBackground.value) {
+      try {
+        const bgImg = await loadImageAsync(canvasBackground.value);
+        ctx.drawImage(bgImg, 0, 0, canvasWidth, canvasHeight);
+      } catch (e) {
+        console.error("Error al cargar la imagen de fondo", e);
+        ctx.fillStyle = '#2b2b2b';
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+      }
+    }
+
+    // 2. Dibujar las capas en orden inverso de Z-Index (ZIndex ascendente)
+    const sortedLayers = [...layers].sort((a, b) => a.zIndex - b.zIndex);
+
+    for (const layer of sortedLayers) {
+      ctx.save();
+
+      // Mover el origen de coordenadas al centro de la capa
+      const cx = layer.x + layer.width / 2;
+      const cy = layer.y + layer.height / 2;
+      ctx.translate(cx, cy);
+
+      // Rotar
+      ctx.rotate((layer.rotation * Math.PI) / 180);
+
+      if (layer.type === 'image' && layer.imageUrl) {
+        try {
+          const img = await loadImageAsync(layer.imageUrl);
+          ctx.drawImage(img, -layer.width / 2, -layer.height / 2, layer.width, layer.height);
+        } catch (e) {
+          console.error("Error al cargar la imagen de la capa", layer.id, e);
+        }
+      }
+      else if (layer.type === 'text' && layer.text) {
+        ctx.font = `bold ${layer.fontSize || 40}px ${layer.fontFamily || 'Impact'}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        const lines = layer.text.split('\n');
+        const fontSize = layer.fontSize || 40;
+        const lineHeight = fontSize * 1.1;
+        const startY = -((lines.length - 1) * lineHeight) / 2;
+
+        lines.forEach((line, index) => {
+          const y = startY + index * lineHeight;
+
+          // Dibujar el borde del clon trasero
+          if (layer.borderWidth && layer.borderWidth > 0) {
+            ctx.strokeStyle = layer.borderColor || '#000000';
+            ctx.lineWidth = layer.borderWidth * 2; // se multiplica por 2 ya que strokeText se expande hacia adentro y afuera
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            ctx.strokeText(line, 0, y);
+          }
+
+          // Dibujar el frente
+          ctx.fillStyle = layer.color || '#ffffff';
+          ctx.fillText(line, 0, y);
+        });
+      }
+
+      ctx.restore();
+    }
+
+    return canvas;
+  };
+
   const handleExportMeme = async () => {
     setIsProcessing(true);
     setProcessingStatus('Generando imagen de alta resolución...');
 
     try {
-      const canvas = document.createElement('canvas');
-      canvas.width = canvasWidth;
-      canvas.height = canvasHeight;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('No se pudo obtener el contexto 2D del Canvas');
-
-      // 1. Dibujar el fondo
-      if (canvasBackground.type === 'color') {
-        if (canvasBackground.value !== 'transparent') {
-          ctx.fillStyle = canvasBackground.value;
-          ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-        } else {
-          ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-        }
-      } else if (canvasBackground.type === 'image' && canvasBackground.value) {
-        try {
-          const bgImg = await loadImageAsync(canvasBackground.value);
-          ctx.drawImage(bgImg, 0, 0, canvasWidth, canvasHeight);
-        } catch (e) {
-          console.error("Error al cargar la imagen de fondo", e);
-          ctx.fillStyle = '#2b2b2b';
-          ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-        }
-      }
-
-      // 2. Dibujar las capas en orden inverso de Z-Index (ZIndex ascendente)
-      const sortedLayers = [...layers].sort((a, b) => a.zIndex - b.zIndex);
-
-      for (const layer of sortedLayers) {
-        ctx.save();
-        
-        // Mover el origen de coordenadas al centro de la capa
-        const cx = layer.x + layer.width / 2;
-        const cy = layer.y + layer.height / 2;
-        ctx.translate(cx, cy);
-        
-        // Rotar
-        ctx.rotate((layer.rotation * Math.PI) / 180);
-
-        if (layer.type === 'image' && layer.imageUrl) {
-          try {
-            const img = await loadImageAsync(layer.imageUrl);
-            ctx.drawImage(img, -layer.width / 2, -layer.height / 2, layer.width, layer.height);
-          } catch (e) {
-            console.error("Error al cargar la imagen de la capa", layer.id, e);
-          }
-        } 
-        else if (layer.type === 'text' && layer.text) {
-          ctx.font = `bold ${layer.fontSize || 40}px ${layer.fontFamily || 'Impact'}`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-
-          const lines = layer.text.split('\n');
-          const fontSize = layer.fontSize || 40;
-          const lineHeight = fontSize * 1.1;
-          const startY = -((lines.length - 1) * lineHeight) / 2;
-
-          lines.forEach((line, index) => {
-            const y = startY + index * lineHeight;
-
-            // Dibujar el borde del clon trasero
-            if (layer.borderWidth && layer.borderWidth > 0) {
-              ctx.strokeStyle = layer.borderColor || '#000000';
-              ctx.lineWidth = layer.borderWidth * 2; // se multiplica por 2 ya que strokeText se expande hacia adentro y afuera
-              ctx.lineJoin = 'round';
-              ctx.lineCap = 'round';
-              ctx.strokeText(line, 0, y);
-            }
-
-            // Dibujar el frente
-            ctx.fillStyle = layer.color || '#ffffff';
-            ctx.fillText(line, 0, y);
-          });
-        }
-
-        ctx.restore();
-      }
+      const canvas = await renderMemeToCanvas();
 
       // 3. Descargar
       const dataUrl = canvas.toDataURL('image/png');
@@ -927,6 +934,35 @@ export default function App() {
       alert(`Error al exportar: ${err.message}`);
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  // Estado del botón "Copiar": idle | copying | success | error
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copying' | 'success' | 'error'>('idle');
+
+  const handleCopyMemeToClipboard = async () => {
+    if (copyStatus === 'copying') return;
+    if (typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) {
+      setCopyStatus('error');
+      window.setTimeout(() => setCopyStatus('idle'), 2500);
+      return;
+    }
+    setCopyStatus('copying');
+    try {
+      const canvas = await renderMemeToCanvas();
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (b) => (b ? resolve(b) : reject(new Error('No se pudo generar la imagen para el portapapeles.'))),
+          'image/png'
+        );
+      });
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      setCopyStatus('success');
+    } catch (err) {
+      console.error(err);
+      setCopyStatus('error');
+    } finally {
+      window.setTimeout(() => setCopyStatus('idle'), 2000);
     }
   };
 
@@ -1435,6 +1471,27 @@ export default function App() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: 'auto', paddingTop: '15px', borderTop: '1px solid var(--border-color)' }}>
                 <button className="btn btn-accent" onClick={handleExportMeme} disabled={layers.length === 0}>
                   Exportar Meme (PNG)
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={handleCopyMemeToClipboard}
+                  disabled={layers.length === 0 || copyStatus === 'copying'}
+                  title="Copia el meme como imagen al portapapeles del sistema"
+                  style={
+                    copyStatus === 'success'
+                      ? { color: 'var(--success)', borderColor: 'var(--success)' }
+                      : copyStatus === 'error'
+                        ? { color: 'var(--danger)', borderColor: 'var(--danger)' }
+                        : undefined
+                  }
+                >
+                  {copyStatus === 'copying'
+                    ? 'Copiando…'
+                    : copyStatus === 'success'
+                      ? '✓ Copiado al portapapeles'
+                      : copyStatus === 'error'
+                        ? '✗ No se pudo copiar'
+                        : 'Copiar al portapapeles'}
                 </button>
                 <button className="btn btn-secondary" onClick={handleResetCanvas}>
                   Limpiar Lienzo
