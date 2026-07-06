@@ -28,7 +28,7 @@
   font-family: 'Outfit', sans-serif;
   font-weight: 800;
   font-size: 24px;
-  background: linear-gradient(135deg, #fff 30%, var(--primary-hover) 100%);
+  background: var(--header-gradient);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -61,7 +61,7 @@
 }
 
 .tab-btn:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-tab-hover);
   color: var(--text-primary);
 }
 
@@ -924,7 +924,7 @@
   gap: 14px;
   border-radius: 8px;
   border: 1px solid var(--border-color);
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--bg-format-btn);
   color: var(--text-secondary);
   padding: 12px;
   height: 56px;
@@ -935,14 +935,14 @@
 }
 
 .downloader-format-btn:hover:not(:disabled) {
-  border-color: rgba(124, 108, 246, 0.5);
-  background: rgba(124, 108, 246, 0.03);
+  border-color: var(--primary-hover);
+  background: var(--bg-tab-hover);
 }
 
 .downloader-format-btn.active {
   border-color: var(--primary);
-  background: rgba(124, 108, 246, 0.1);
-  color: #fff;
+  background: var(--bg-format-icon);
+  color: var(--text-primary);
 }
 
 .downloader-format-icon-box {

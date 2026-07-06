@@ -7,7 +7,7 @@
    ============================================================ */
 :root {
   /* ============================================================
-     Light Theme (Default)
+     Premium Light Theme (Default)
      ============================================================ */
   --background: #f8fafc;
   --foreground: #0f172a;
@@ -18,38 +18,38 @@
   --popover: #ffffff;
   --popover-foreground: #0f172a;
 
-  --primary: #7C6CF6;
-  --primary-foreground: #FFFFFF;
+  --primary: #6355e6;
+  --primary-foreground: #ffffff;
 
-  --secondary: #06b6d4;
+  --secondary: #0891b2;
   --secondary-foreground: #ffffff;
 
   --muted: #f1f5f9;
-  --muted-foreground: #64748b;
+  --muted-foreground: #475569;
 
   --accent: #f1f5f9;
   --accent-foreground: #0f172a;
 
   --destructive: #ef4444;
-  --destructive-foreground: #FFFFFF;
+  --destructive-foreground: #ffffff;
 
   --border: rgba(15, 23, 42, 0.08);
   --input: rgba(15, 23, 42, 0.06);
-  --ring: #7C6CF6;
+  --ring: #6355e6;
 
   --radius: 0.5rem;
 
-  /* Legacy tokens kept for compatibility with current code */
+  /* Legacy & Custom App Variables */
   --bg-main: #f8fafc;
   --bg-card: #ffffff;
   --bg-card-hover: #f1f5f9;
   --border-color: rgba(15, 23, 42, 0.08);
-  --border-focus: rgba(124, 108, 246, 0.5);
+  --border-focus: rgba(99, 85, 230, 0.4);
 
-  --primary-hover: #6366f1;
-  --primary-glow: rgba(124, 108, 246, 0.15);
+  --primary-hover: #4f46e5;
+  --primary-glow: rgba(99, 85, 230, 0.15);
 
-  --secondary-hover: #0891b2;
+  --secondary-hover: #0e7490;
 
   --text-primary: #0f172a;
   --text-secondary: #475569;
@@ -59,15 +59,17 @@
   --danger: #ef4444;
   --warning: #f59e0b;
 
-  /* App custom variables */
-  --bg-input: #f1f5f9;
+  /* App custom elements context */
+  --bg-input: #ffffff;
   --text-input: #0f172a;
-  --bg-item: #ffffff;
-  --bg-panel: rgba(15, 23, 42, 0.03);
+  --bg-item: #f8fafc;
+  --bg-panel: #f1f5f9;
   --bg-modal: #ffffff;
   --shadow-modal: rgba(15, 23, 42, 0.08);
-  --bg-format-btn: rgba(15, 23, 42, 0.02);
-  --bg-format-icon: rgba(15, 23, 42, 0.05);
+  --bg-format-btn: rgba(99, 85, 230, 0.02);
+  --bg-format-icon: rgba(99, 85, 230, 0.06);
+  --bg-tab-hover: rgba(15, 23, 42, 0.04);
+  --header-gradient: linear-gradient(135deg, #0f172a 30%, #6355e6 100%);
 
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   line-height: 1.5;
@@ -83,65 +85,67 @@
 
 .dark {
   /* ============================================================
-     Dark Theme
+     Premium Dark Theme
      ============================================================ */
-  --background: #0B0D12;
-  --foreground: #E5E7EB;
+  --background: #08090d;
+  --foreground: #f8fafc;
 
-  --card: #14171F;
-  --card-foreground: #E5E7EB;
+  --card: #11131c;
+  --card-foreground: #f8fafc;
 
-  --popover: #14171F;
-  --popover-foreground: #E5E7EB;
+  --popover: #11131c;
+  --popover-foreground: #f8fafc;
 
-  --primary: #7C6CF6;
-  --primary-foreground: #FFFFFF;
+  --primary: #8a7bfa;
+  --primary-foreground: #ffffff;
 
-  --secondary: #22D3EE;
-  --secondary-foreground: #0B0D12;
+  --secondary: #00f2fe;
+  --secondary-foreground: #08090d;
 
-  --muted: #1A1E29;
-  --muted-foreground: #9CA3AF;
+  --muted: #171923;
+  --muted-foreground: #94a3b8;
 
-  --accent: #1A1E29;
-  --accent-foreground: #E5E7EB;
+  --accent: #171923;
+  --accent-foreground: #f8fafc;
 
-  --destructive: #ef4444;
-  --destructive-foreground: #FFFFFF;
+  --destructive: #ff4d6d;
+  --destructive-foreground: #ffffff;
 
-  --border: rgba(255, 255, 255, 0.06);
-  --input: rgba(255, 255, 255, 0.08);
-  --ring: #7C6CF6;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.06);
+  --ring: #8a7bfa;
 
-  /* Legacy tokens kept for compatibility with current code */
-  --bg-main: #0B0D12;
-  --bg-card: #14171F;
-  --bg-card-hover: #1A1E29;
-  --border-color: rgba(255, 255, 255, 0.06);
-  --border-focus: rgba(124, 108, 246, 0.5);
+  /* Legacy & Custom App Variables */
+  --bg-main: #08090d;
+  --bg-card: #11131c;
+  --bg-card-hover: #171923;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-focus: rgba(138, 123, 250, 0.4);
 
-  --primary-hover: #9089F8;
-  --primary-glow: rgba(124, 108, 246, 0.3);
+  --primary-hover: #a195ff;
+  --primary-glow: rgba(138, 123, 250, 0.25);
 
-  --secondary-hover: #67E8F9;
+  --secondary-hover: #38bdf8;
 
-  --text-primary: #E5E7EB;
-  --text-secondary: #9CA3AF;
-  --text-muted: #6B7280;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
 
-  --success: #10b981;
-  --danger: #ef4444;
-  --warning: #f59e0b;
+  --success: #00f5a0;
+  --danger: #ff4d6d;
+  --warning: #ffd166;
 
-  /* App custom variables */
-  --bg-input: #090a0f;
+  /* App custom elements context */
+  --bg-input: #0a0b12;
   --text-input: #ffffff;
-  --bg-item: #10121a;
-  --bg-panel: rgba(0, 0, 0, 0.2);
-  --bg-modal: #11131c;
-  --shadow-modal: rgba(0, 0, 0, 0.4);
-  --bg-format-btn: rgba(255, 255, 255, 0.02);
-  --bg-format-icon: rgba(255, 255, 255, 0.05);
+  --bg-item: #161925;
+  --bg-panel: rgba(5, 6, 10, 0.3);
+  --bg-modal: #121422;
+  --shadow-modal: rgba(0, 0, 0, 0.6);
+  --bg-format-btn: rgba(138, 123, 250, 0.02);
+  --bg-format-icon: rgba(138, 123, 250, 0.08);
+  --bg-tab-hover: rgba(255, 255, 255, 0.03);
+  --header-gradient: linear-gradient(135deg, #ffffff 30%, #8a7bfa 100%);
 
   color-scheme: dark;
 }
