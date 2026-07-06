@@ -1,4 +1,4 @@
-﻿import os
+import os
 import glob
 import yt_dlp
 from yt_dlp.networking.impersonate import ImpersonateTarget
@@ -23,12 +23,23 @@ os.makedirs(TMP_DIR, exist_ok=True)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 COOKIES_PATH = os.path.join(BASE_DIR, "cookies.txt")
 
+# Soporte para inyectar cookies via variable de entorno COOKIES_CONTENT (Railway / cualquier PaaS).
+# Si el archivo no existe pero la variable de entorno está seteada, se escribe el archivo en runtime.
+_cookies_env = os.environ.get("COOKIES_CONTENT", "").strip()
+if not os.path.exists(COOKIES_PATH) and _cookies_env:
+    try:
+        with open(COOKIES_PATH, 'w', encoding='utf-8') as _f:
+            _f.write(_cookies_env)
+        print(f"[SASDownloader] cookies.txt generado desde variable de entorno COOKIES_CONTENT")
+    except Exception as _e:
+        print(f"[SASDownloader] ERROR al escribir cookies.txt desde env: {_e}")
+
 if os.path.exists(COOKIES_PATH):
     print(f"[SASDownloader] COOKIES.TXT ENCONTRADO EN {COOKIES_PATH}")
     with open(COOKIES_PATH, 'r', encoding='utf-8', errors='ignore') as f:
         print(f"[SASDownloader] Primera linea del cookie: {f.readline().strip()}")
 else:
-    print(f"[SASDownloader] ATENCION: cookies.txt NO ENCONTRADO EN {COOKIES_PATH}")
+    print(f"[SASDownloader] ATENCION: cookies.txt NO ENCONTRADO. Las descargas usaran fallback sin cookies.")
 
 @app.get("/")
 def read_root():

@@ -55,3 +55,7 @@ Thumbs.db
 *.mp3
 test_yt.py
 skills-lock.json
+
+# Cookies — NUNCA commitear, contienen sesiones privadas de YouTube
+cookies.txt
+**/cookies.txt
