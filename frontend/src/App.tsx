@@ -36,6 +36,7 @@ interface Layer {
   imageUrl?: string;
   originalImageUrl?: string;
   adjustments?: ImageAdjustments; // Ajustes de color (mini-photoshop)
+  curvesPoints?: [number, number][]; // Puntos de curva [input, output]
 }
 
 // Ajustes "neutros" — equivalen a no aplicar ningún filtro CSS.
@@ -48,6 +49,30 @@ const defaultAdjustments = (): ImageAdjustments => ({
   invert: 0,
   sepia: 0,
 });
+
+export function getCurveLUT(points: [number, number][]): Uint8Array {
+  const lut = new Uint8Array(256);
+  const sorted = [...points].sort((a, b) => a[0] - b[0]);
+  
+  for (let i = 0; i < 256; i++) {
+    let p1 = sorted[0];
+    let p2 = sorted[sorted.length - 1];
+    for (let j = 0; j < sorted.length - 1; j++) {
+      if (i >= sorted[j][0] && i <= sorted[j+1][0]) {
+        p1 = sorted[j];
+        p2 = sorted[j+1];
+        break;
+      }
+    }
+    if (p1[0] === p2[0]) {
+      lut[i] = p1[1];
+    } else {
+      const t = (i - p1[0]) / (p2[0] - p1[0]);
+      lut[i] = Math.max(0, Math.min(255, Math.round(p1[1] + t * (p2[1] - p1[1]))));
+    }
+  }
+  return lut;
+}
 
 // Convierte los ajustes a un string CSS `filter` o a un string para `ctx.filter`.
 // Devuelve cadena vacía si todos los valores son neutros (no aplicar nada).
@@ -123,7 +148,7 @@ export default function App() {
   // --- Estados de Modales Auxiliares (Photoshop Layer Styles & Crop) ---
   const [isStylesModalOpen, setIsStylesModalOpen] = useState<boolean>(false);
   const [isCropModalOpen, setIsCropModalOpen] = useState<boolean>(false);
-  const [stylesActiveTab, setStylesActiveTab] = useState<'fill' | 'stroke' | 'background' | 'adjustments' | 'presets'>('fill');
+  const [stylesActiveTab, setStylesActiveTab] = useState<'fill' | 'stroke' | 'background' | 'adjustments' | 'curves' | 'presets'>('fill');
 
   // Estados del Crop (Recorte)
   const [cropX, setCropX] = useState<number>(0);
@@ -1053,16 +1078,42 @@ export default function App() {
       ctx.rotate((layer.rotation * Math.PI) / 180);
 
       if (layer.type === 'image' && layer.imageUrl) {
-        // Aplicar los ajustes de color de la capa al filtro del canvas.
-        // Se restaura a 'none' después para no afectar a las demás capas.
-        ctx.filter = adjustmentsToFilter(layer.adjustments) || 'none';
         try {
           const img = await loadImageAsync(layer.imageUrl);
-          ctx.drawImage(img, -layer.width / 2, -layer.height / 2, layer.width, layer.height);
+          if (layer.curvesPoints && layer.curvesPoints.length > 0) {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = layer.width;
+            tempCanvas.height = layer.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            if (tempCtx) {
+              if (layer.adjustments) {
+                tempCtx.filter = adjustmentsToFilter(layer.adjustments) || 'none';
+              }
+              tempCtx.drawImage(img, 0, 0, layer.width, layer.height);
+              tempCtx.filter = 'none';
+              
+              const imgData = tempCtx.getImageData(0, 0, layer.width, layer.height);
+              const data = imgData.data;
+              const lut = getCurveLUT(layer.curvesPoints);
+              for (let i = 0; i < data.length; i += 4) {
+                data[i] = lut[data[i]];
+                data[i+1] = lut[data[i+1]];
+                data[i+2] = lut[data[i+2]];
+              }
+              tempCtx.putImageData(imgData, 0, 0);
+              ctx.drawImage(tempCanvas, -layer.width / 2, -layer.height / 2, layer.width, layer.height);
+            } else {
+              ctx.filter = adjustmentsToFilter(layer.adjustments) || 'none';
+              ctx.drawImage(img, -layer.width / 2, -layer.height / 2, layer.width, layer.height);
+              ctx.filter = 'none';
+            }
+          } else {
+            ctx.filter = adjustmentsToFilter(layer.adjustments) || 'none';
+            ctx.drawImage(img, -layer.width / 2, -layer.height / 2, layer.width, layer.height);
+            ctx.filter = 'none';
+          }
         } catch (e) {
           console.error("Error al cargar la imagen de la capa", layer.id, e);
-        } finally {
-          ctx.filter = 'none';
         }
       }
       else if (layer.type === 'text' && layer.text) {
@@ -1156,6 +1207,88 @@ export default function App() {
       setCanvasBackground({ type: 'color', value: 'transparent' });
       setSelectedLayerId(null);
     }
+  };
+
+  const [selectedPointIndex, setSelectedPointIndex] = useState<number | null>(null);
+
+  const handleCurvesSVGMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
+    const svg = e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    const x = Math.max(0, Math.min(255, Math.round(((e.clientX - rect.left) / rect.width) * 255)));
+    const y = Math.max(0, Math.min(255, Math.round((1 - (e.clientY - rect.top) / rect.height) * 255)));
+
+    const selectedLayer = layers.find(l => l.id === selectedLayerId);
+    if (!selectedLayer) return;
+    const points = selectedLayer.curvesPoints || [[0, 0], [255, 255]];
+
+    const threshold = 15;
+    let foundIdx = -1;
+    for (let i = 0; i < points.length; i++) {
+      const dist = Math.hypot(points[i][0] - x, points[i][1] - y);
+      if (dist < threshold) {
+        foundIdx = i;
+        break;
+      }
+    }
+
+    if (foundIdx !== -1) {
+      setSelectedPointIndex(foundIdx);
+    } else {
+      let insertIdx = 0;
+      for (let i = 0; i < points.length; i++) {
+        if (x > points[i][0]) {
+          insertIdx = i + 1;
+        }
+      }
+      const newPoints = [...points];
+      newPoints.splice(insertIdx, 0, [x, y]);
+      setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, curvesPoints: newPoints } : l));
+      setSelectedPointIndex(insertIdx);
+    }
+  };
+
+  const handleCurvesSVGMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (selectedPointIndex === null) return;
+    const svg = e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    const x = Math.max(0, Math.min(255, Math.round(((e.clientX - rect.left) / rect.width) * 255)));
+    const y = Math.max(0, Math.min(255, Math.round((1 - (e.clientY - rect.top) / rect.height) * 255)));
+
+    const selectedLayer = layers.find(l => l.id === selectedLayerId);
+    if (!selectedLayer) return;
+    const points = [...(selectedLayer.curvesPoints || [[0, 0], [255, 255]])];
+
+    const currentPoint = points[selectedPointIndex];
+    if (!currentPoint) return;
+
+    if (selectedPointIndex === 0) {
+      points[selectedPointIndex] = [0, y];
+    } else if (selectedPointIndex === points.length - 1) {
+      points[selectedPointIndex] = [255, y];
+    } else {
+      const minX = points[selectedPointIndex - 1][0] + 5;
+      const maxX = points[selectedPointIndex + 1][0] - 5;
+      const boundedX = Math.max(minX, Math.min(x, maxX));
+      points[selectedPointIndex] = [boundedX, y];
+    }
+
+    setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, curvesPoints: points } : l));
+  };
+
+  const handleCurvesSVGMouseUp = () => {
+    setSelectedPointIndex(null);
+  };
+
+  const handleCurvesDoubleClickPoint = (index: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const selectedLayer = layers.find(l => l.id === selectedLayerId);
+    if (!selectedLayer) return;
+    const points = selectedLayer.curvesPoints || [[0, 0], [255, 255]];
+    if (index === 0 || index === points.length - 1) return;
+
+    const newPoints = points.filter((_, idx) => idx !== index);
+    setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, curvesPoints: newPoints } : l));
+    setSelectedPointIndex(null);
   };
 
   const handleOpenCropModal = () => {
@@ -1311,6 +1444,70 @@ export default function App() {
   const handleCropMouseUp = () => {
     setCropDragMode(null);
   };
+
+  useEffect(() => {
+    if (!isStylesModalOpen || !selectedLayerId) return;
+    const selectedLayer = layers.find(l => l.id === selectedLayerId);
+    if (!selectedLayer || selectedLayer.type !== 'image' || !selectedLayer.imageUrl) return;
+
+    const img = new Image();
+    img.src = selectedLayer.originalImageUrl || selectedLayer.imageUrl;
+    img.onload = () => {
+      const canvas = document.getElementById('styles-preview-canvas') as HTMLCanvasElement;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const maxW = 200;
+      const maxH = 110;
+      let w = img.naturalWidth || img.width;
+      let h = img.naturalHeight || img.height;
+      const aspect = w / h;
+      if (w > maxW) {
+        w = maxW;
+        h = maxW / aspect;
+      }
+      if (h > maxH) {
+        h = maxH;
+        w = maxH * aspect;
+      }
+      canvas.width = w;
+      canvas.height = h;
+
+      ctx.clearRect(0, 0, w, h);
+      
+      const adjustments = selectedLayer.adjustments;
+      if (adjustments) {
+        const filterParts: string[] = [];
+        if (adjustments.brightness !== undefined) filterParts.push(`brightness(${adjustments.brightness}%)`);
+        if (adjustments.contrast !== undefined) filterParts.push(`contrast(${adjustments.contrast}%)`);
+        if (adjustments.saturation !== undefined) filterParts.push(`saturate(${adjustments.saturation}%)`);
+        if (adjustments.hue !== undefined) filterParts.push(`hue-rotate(${adjustments.hue}deg)`);
+        if (adjustments.invert !== undefined) filterParts.push(`invert(${adjustments.invert}%)`);
+        if (adjustments.sepia !== undefined) filterParts.push(`sepia(${adjustments.sepia}%)`);
+        if (adjustments.blur !== undefined && adjustments.blur > 0) filterParts.push(`blur(${adjustments.blur}px)`);
+        
+        if (filterParts.length > 0) {
+          ctx.filter = filterParts.join(' ');
+        }
+      }
+
+      ctx.drawImage(img, 0, 0, w, h);
+      ctx.filter = 'none';
+
+      if (selectedLayer.curvesPoints && selectedLayer.curvesPoints.length > 0) {
+        const imgData = ctx.getImageData(0, 0, w, h);
+        const data = imgData.data;
+        const lut = getCurveLUT(selectedLayer.curvesPoints);
+        for (let i = 0; i < data.length; i += 4) {
+          data[i] = lut[data[i]];
+          data[i+1] = lut[data[i+1]];
+          data[i+2] = lut[data[i+2]];
+        }
+        ctx.putImageData(imgData, 0, 0);
+      }
+    };
+  }, [isStylesModalOpen, selectedLayerId, layers]);
 
   return (
     <div className="app-container">
@@ -1641,6 +1838,7 @@ export default function App() {
 
             {/* Barra lateral de control */}
             <aside className="control-sidebar">
+              {/* Sección 1: Añadir Capas */}
               <div className="sidebar-section">
                 <span className="section-title">Añadir Capas</span>
                 <div style={{ display: 'flex', gap: '10px' }}>
@@ -1660,45 +1858,15 @@ export default function App() {
                 />
               </div>
 
-              {/* Fondo del lienzo */}
-              <div className="sidebar-section">
-                <span className="section-title">Fondo del Lienzo</span>
-                <div className="color-picker-row">
-                  <div className="color-input-wrapper">
-                    <input 
-                      type="color" 
-                      value={canvasBackground.type === 'color' ? canvasBackground.value : '#000000'} 
-                      onChange={(e) => handleBgColorChange(e.target.value)} 
-                    />
-                    <span>Color</span>
-                  </div>
-                  <button className="btn btn-secondary" style={{ padding: '8px' }} onClick={() => bgFileInputRef.current?.click()}>
-                    Subir Imagen
-                  </button>
-                </div>
-                <input 
-                  type="file" 
-                  ref={bgFileInputRef} 
-                  onChange={handleBgImageUpload} 
-                  accept="image/*" 
-                  style={{ display: 'none' }} 
-                />
-                {(canvasBackground.type === 'image' || (canvasBackground.type === 'color' && canvasBackground.value !== 'transparent')) && (
-                  <button className="btn btn-secondary" style={{ width: '100%', padding: '6px', fontSize: '12px' }} onClick={handleClearBg}>
-                    Hacer Transparente
-                  </button>
-                )}
-              </div>
-
-              {/* Lista de Capas */}
+              {/* Sección 2: Lista de Capas */}
               <div className="sidebar-section">
                 <span className="section-title">Capas ({layers.length})</span>
                 {layers.length === 0 ? (
                   <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px', padding: '15px' }}>
-                    No hay capas. Adicione texto o imagenes.
+                    No hay capas en el lienzo.
                   </div>
                 ) : (
-                  <div className="layer-list">
+                  <div className="layer-list" style={{ maxHeight: '180px', overflowY: 'auto' }}>
                     {layers.map(layer => {
                       const isActive = layer.id === selectedLayerId;
                       const isDragging = layer.id === draggedLayerId;
@@ -1711,39 +1879,20 @@ export default function App() {
                           onDragStart={(e) => handleLayerDragStart(e, layer.id)}
                           onDragOver={(e) => handleLayerDragOver(e)}
                           onDrop={(e) => handleLayerDrop(e, layer.id)}
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', marginBottom: '4px', borderRadius: '6px', background: isActive ? 'var(--primary-glow)' : 'rgba(255,255,255,0.02)', cursor: 'pointer', border: isActive ? '1px solid var(--primary)' : '1px solid transparent' }}
                         >
-                          {layer.type === 'image' && layer.imageUrl ? (
-                            <img
-                              src={layer.imageUrl}
-                              alt={layer.name}
-                              className="layer-thumbnail"
-                              draggable={false}
-                            />
-                          ) : (
-                            <div className="layer-thumbnail layer-thumbnail-text" aria-hidden>
-                              T
-                            </div>
-                          )}
-                          <span className="layer-info">{layer.name}</span>
-                          <div className="layer-actions" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              className={`icon-btn layer-menu-toggle ${expandedLayerId === layer.id ? 'is-open' : ''}`}
-                              onClick={() =>
-                                setExpandedLayerId(
-                                  expandedLayerId === layer.id ? null : layer.id
-                                )
-                              }
-                              title={expandedLayerId === layer.id ? 'Ocultar propiedades' : 'Mostrar propiedades'}
-                              aria-label="Propiedades de capa"
-                              aria-expanded={expandedLayerId === layer.id}
-                            >
-                              <ChevronUp className="size-4 layer-menu-arrow" />
-                            </button>
+                          <span style={{ fontSize: '13px', color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }}>
+                            {layer.type === 'text' ? 'Texto: ' : 'Imagen: '}{layer.name}
+                          </span>
+                          <div style={{ display: 'flex', gap: '4px' }}>
                             <button
                               className="icon-btn danger"
-                              onClick={() => handleDeleteLayer(layer.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteLayer(layer.id);
+                              }}
                               title="Borrar capa"
-                              aria-label="Borrar capa"
+                              style={{ padding: '4px' }}
                             >
                               <Trash2 className="size-4" />
                             </button>
@@ -1751,50 +1900,75 @@ export default function App() {
                         </div>
                       );
                     })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Propiedades de la capa expandida (trigger: flecha en el item) */}
-                {expandedLayer && (
-                  <div
-                    className="sidebar-section layer-properties-panel animate-fade-in"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div className="layer-properties-header">
-                      <span className="section-title" style={{ color: 'var(--primary-hover)' }}>
-                        Propiedades — {expandedLayer.name}
-                      </span>
-                      <button
-                        className="icon-btn"
-                        onClick={() => setExpandedLayerId(null)}
-                        title="Cerrar propiedades"
-                        aria-label="Cerrar propiedades"
-                      >
-                        ×
-                      </button>
-                    </div>
-                    <LayerPropertiesPanel
-                      layer={expandedLayer}
-                      onUpdate={(updates) => {
-                        setLayers((prev) =>
-                          prev.map((l) => (l.id === expandedLayer.id ? { ...l, ...updates } : l))
-                        );
-                      }}
-                      onOpenStyles={() => {
-                        if (expandedLayer.type === 'image') {
-                          setStylesActiveTab('adjustments');
-                        } else {
-                          setStylesActiveTab('fill');
-                        }
-                        setIsStylesModalOpen(true);
-                      }}
-                      onOpenCrop={handleOpenCropModal}
-                    />
                   </div>
                 )}
+              </div>
 
-                {/* Botones de acción del Lienzo */}
+              {/* Sección 3: Propiedades de Capa Seleccionada O Fondo de Lienzo */}
+              {selectedLayerId && selectedLayer ? (
+                <div className="sidebar-section layer-properties-panel animate-fade-in">
+                  <div className="layer-properties-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <span className="section-title" style={{ color: 'var(--primary-hover)', margin: 0 }}>
+                      Propiedades
+                    </span>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ padding: '2px 8px', fontSize: '10px' }}
+                      onClick={() => setSelectedLayerId(null)}
+                    >
+                      Deseleccionar
+                    </button>
+                  </div>
+                  <LayerPropertiesPanel
+                    layer={selectedLayer}
+                    onUpdate={(updates) => {
+                      setLayers((prev) =>
+                        prev.map((l) => (l.id === selectedLayer.id ? { ...l, ...updates } : l))
+                      );
+                    }}
+                    onOpenStyles={() => {
+                      if (selectedLayer.type === 'image') {
+                        setStylesActiveTab('adjustments');
+                      } else {
+                        setStylesActiveTab('fill');
+                      }
+                      setIsStylesModalOpen(true);
+                    }}
+                    onOpenCrop={handleOpenCropModal}
+                  />
+                </div>
+              ) : (
+                <div className="sidebar-section">
+                  <span className="section-title">Fondo del Lienzo</span>
+                  <div className="color-picker-row">
+                    <div className="color-input-wrapper">
+                      <input 
+                        type="color" 
+                        value={canvasBackground.type === 'color' ? canvasBackground.value : '#000000'} 
+                        onChange={(e) => handleBgColorChange(e.target.value)} 
+                      />
+                      <span>Color</span>
+                    </div>
+                    <button className="btn btn-secondary" style={{ padding: '8px' }} onClick={() => bgFileInputRef.current?.click()}>
+                      Subir Imagen
+                    </button>
+                  </div>
+                  <input 
+                    type="file" 
+                    ref={bgFileInputRef} 
+                    onChange={handleBgImageUpload} 
+                    accept="image/*" 
+                    style={{ display: 'none' }} 
+                  />
+                  {(canvasBackground.type === 'image' || (canvasBackground.type === 'color' && canvasBackground.value !== 'transparent')) && (
+                    <button className="btn btn-secondary" style={{ width: '100%', padding: '6px', fontSize: '12px', marginTop: '8px' }} onClick={handleClearBg}>
+                      Hacer Transparente
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Botones de acción del Lienzo */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: 'auto', paddingTop: '15px', borderTop: '1px solid var(--border-color)' }}>
                 <button className="btn btn-accent" onClick={handleExportMeme} disabled={layers.length === 0}>
                   Exportar Meme (PNG)
@@ -1889,6 +2063,13 @@ export default function App() {
                       </button>
                       <button
                         type="button"
+                        className={`layer-styles-tab ${stylesActiveTab === 'curves' ? 'active' : ''}`}
+                        onClick={() => setStylesActiveTab('curves')}
+                      >
+                        Curvas
+                      </button>
+                      <button
+                        type="button"
                         className={`layer-styles-tab ${stylesActiveTab === 'presets' ? 'active' : ''}`}
                         onClick={() => setStylesActiveTab('presets')}
                       >
@@ -1945,14 +2126,12 @@ export default function App() {
                         overflow: 'hidden',
                         padding: '10px'
                       }}>
-                        <img
-                          src={selectedLayer.imageUrl}
-                          alt="Preview"
+                        <canvas
+                          id="styles-preview-canvas"
                           style={{
                             maxHeight: '100%',
                             maxWidth: '100%',
-                            objectFit: 'contain',
-                            filter: adjustmentsToFilter(selectedLayer.adjustments)
+                            objectFit: 'contain'
                           }}
                         />
                       </div>
@@ -2064,7 +2243,7 @@ export default function App() {
                           { key: 'hue', label: 'Tono', min: -180, max: 180, step: 1, unit: '°', defaultVal: 0 },
                           { key: 'invert', label: 'Invertir', min: 0, max: 100, step: 1, unit: '%', defaultVal: 0 },
                           { key: 'sepia', label: 'Sepia', min: 0, max: 100, step: 1, unit: '%', defaultVal: 0 },
-                          { key: 'blur', label: 'Desenfoque', min: 0, max: 20, step: 0.5, unit: 'px', defaultVal: 0 },
+                          {key: 'blur', label: 'Desenfoque', min: 0, max: 20, step: 0.5, unit: 'px', defaultVal: 0},
                         ] as const
                       ).map(({ key, label, min, max, step, unit, defaultVal }) => {
                         const value = selectedLayer.adjustments?.[key] ?? defaultVal;
@@ -2100,6 +2279,103 @@ export default function App() {
                       </button>
                     </div>
                   )}
+
+                  {/* Controles de Imagen - Curvas (Photoshop style Curves Editor) */}
+                  {selectedLayer.type === 'image' && stylesActiveTab === 'curves' && (() => {
+                    const points = selectedLayer.curvesPoints || [[0, 0], [255, 255]];
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                        <label style={{ fontWeight: 600 }}>Curvas de Color</label>
+                        <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+                          {/* El SVG del editor de curvas */}
+                          <svg
+                            width="200"
+                            height="200"
+                            style={{
+                              background: 'var(--bg-panel)',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '8px',
+                              overflow: 'visible',
+                              cursor: 'crosshair',
+                              userSelect: 'none'
+                            }}
+                            onMouseDown={handleCurvesSVGMouseDown}
+                            onMouseMove={handleCurvesSVGMouseMove}
+                            onMouseUp={handleCurvesSVGMouseUp}
+                            onMouseLeave={handleCurvesSVGMouseUp}
+                          >
+                            {/* Cuadrículas de referencia (Photoshop style) */}
+                            <line x1="50" y1="0" x2="50" y2="200" stroke="rgba(255,255,255,0.07)" strokeDasharray="3 3" />
+                            <line x1="100" y1="0" x2="100" y2="200" stroke="rgba(255,255,255,0.07)" strokeDasharray="3 3" />
+                            <line x1="150" y1="0" x2="150" y2="200" stroke="rgba(255,255,255,0.07)" strokeDasharray="3 3" />
+                            
+                            <line x1="0" y1="50" x2="200" y2="50" stroke="rgba(255,255,255,0.07)" strokeDasharray="3 3" />
+                            <line x1="0" y1="100" x2="200" y2="100" stroke="rgba(255,255,255,0.07)" strokeDasharray="3 3" />
+                            <line x1="0" y1="150" x2="200" y2="150" stroke="rgba(255,255,255,0.07)" strokeDasharray="3 3" />
+
+                            {/* Diagonal por defecto */}
+                            <line x1="0" y1="200" x2="200" y2="0" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
+
+                            {/* Línea curva conectando los puntos interpolados */}
+                            {(() => {
+                              const svgPointsStr = points
+                                .map((p) => {
+                                  const svgX = (p[0] / 255) * 200;
+                                  const svgY = (1 - p[1] / 255) * 200;
+                                  return `${svgX},${svgY}`;
+                                })
+                                .join(' ');
+                              return (
+                                <polyline
+                                  points={svgPointsStr}
+                                  fill="none"
+                                  stroke="var(--primary)"
+                                  strokeWidth="2.5"
+                                />
+                              );
+                            })()}
+
+                            {/* Círculos para los puntos de control */}
+                            {points.map((p, idx) => {
+                              const svgX = (p[0] / 255) * 200;
+                              const svgY = (1 - p[1] / 255) * 200;
+                              const isEndpoint = idx === 0 || idx === points.length - 1;
+                              return (
+                                <circle
+                                  key={idx}
+                                  cx={svgX}
+                                  cy={svgY}
+                                  r={idx === selectedPointIndex ? 6 : 4.5}
+                                  fill={idx === selectedPointIndex ? 'var(--primary-hover)' : 'var(--primary)'}
+                                  stroke="#fff"
+                                  strokeWidth="1.5"
+                                  style={{ cursor: isEndpoint ? 'ns-resize' : 'move' }}
+                                  onDoubleClick={(e) => handleCurvesDoubleClickPoint(idx, e)}
+                                />
+                              );
+                            })}
+                          </svg>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                            <span style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>Curvas:</span>
+                            <span>• Haz clic para añadir puntos.</span>
+                            <span>• Arrastra para deformar los colores.</span>
+                            <span>• Doble clic para borrar puntos.</span>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ padding: '6px', fontSize: '11px', marginTop: '10px' }}
+                              onClick={() => {
+                                setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, curvesPoints: [[0, 0], [255, 255]] } : l));
+                              }}
+                            >
+                              Restablecer curva
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Controles de Imagen - Filtros */}
                   {selectedLayer.type === 'image' && stylesActiveTab === 'presets' && (
