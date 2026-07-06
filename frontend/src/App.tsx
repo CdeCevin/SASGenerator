@@ -74,6 +74,15 @@ export function getCurveLUT(points: [number, number][]): Uint8Array {
   return lut;
 }
 
+export function getSVGTableValues(points: [number, number][]): string {
+  const lut = getCurveLUT(points);
+  const values: number[] = [];
+  for (let i = 0; i < 256; i++) {
+    values.push(lut[i] / 255);
+  }
+  return values.join(' ');
+}
+
 // Convierte los ajustes a un string CSS `filter` o a un string para `ctx.filter`.
 // Devuelve cadena vacía si todos los valores son neutros (no aplicar nada).
 const adjustmentsToFilter = (a?: ImageAdjustments): string => {
@@ -149,6 +158,7 @@ export default function App() {
   const [isStylesModalOpen, setIsStylesModalOpen] = useState<boolean>(false);
   const [isCropModalOpen, setIsCropModalOpen] = useState<boolean>(false);
   const [stylesActiveTab, setStylesActiveTab] = useState<'fill' | 'stroke' | 'background' | 'adjustments' | 'curves' | 'presets'>('fill');
+  const [backupLayer, setBackupLayer] = useState<Layer | null>(null);
 
   // Estados del Crop (Recorte)
   const [cropX, setCropX] = useState<number>(0);
@@ -1638,6 +1648,27 @@ export default function App() {
                       backgroundPosition: 'center',
                     }}
                   >
+                    {/* Filtros SVG para aplicar curvas a las imágenes del viewport en tiempo real */}
+                    <svg style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }} aria-hidden="true">
+                      <defs>
+                        {layers.map(l => {
+                          if (l.type === 'image' && l.curvesPoints && l.curvesPoints.length > 0) {
+                            const tableVals = getSVGTableValues(l.curvesPoints);
+                            return (
+                              <filter id={`curves-${l.id}`} key={l.id} colorInterpolationFilters="sRGB">
+                                <feComponentTransfer>
+                                  <feFuncR type="table" tableValues={tableVals} />
+                                  <feFuncG type="table" tableValues={tableVals} />
+                                  <feFuncB type="table" tableValues={tableVals} />
+                                </feComponentTransfer>
+                              </filter>
+                            );
+                          }
+                          return null;
+                        })}
+                      </defs>
+                    </svg>
+
                     {/* Render de Capas */}
                     {[...layers].sort((a, b) => a.zIndex - b.zIndex).map(layer => {
                       const isSelected = layer.id === selectedLayerId;
@@ -1664,7 +1695,7 @@ export default function App() {
                                 height: '100%',
                                 objectFit: 'fill',
                                 pointerEvents: 'none',
-                                filter: adjustmentsToFilter(layer.adjustments),
+                                filter: `${layer.curvesPoints && layer.curvesPoints.length > 0 ? `url(#curves-${layer.id}) ` : ''}${adjustmentsToFilter(layer.adjustments)}`,
                               }}
                             />
                           )}
@@ -1865,6 +1896,7 @@ export default function App() {
                       );
                     }}
                     onOpenStyles={() => {
+                      setBackupLayer(JSON.parse(JSON.stringify(selectedLayer)));
                       if (selectedLayer.type === 'image') {
                         setStylesActiveTab('adjustments');
                       } else {
@@ -2293,8 +2325,58 @@ export default function App() {
                 </div>
               </div>
               
-              <div className="layer-styles-footer">
-                <button type="button" className="btn btn-accent" onClick={() => setIsStylesModalOpen(false)}>Aceptar</button>
+              <div className="layer-styles-footer" style={{ display: 'flex', justifyContent: 'space-between', width: '100%', boxSizing: 'border-box' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    saveHistory(layers);
+                    setLayers(prev => prev.map(l => {
+                      if (l.id === selectedLayerId) {
+                        if (l.type === 'image') {
+                          return {
+                            ...l,
+                            adjustments: defaultAdjustments(),
+                            curvesPoints: [[0, 0], [255, 255]]
+                          };
+                        } else {
+                          return {
+                            ...l,
+                            color: '#ffffff',
+                            borderColor: '#000000',
+                            borderWidth: 0,
+                            textBackgroundColor: undefined
+                          };
+                        }
+                      }
+                      return l;
+                    }));
+                  }}
+                >
+                  Restablecer
+                </button>
+                
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      if (backupLayer) {
+                        setLayers(prev => prev.map(l => l.id === backupLayer.id ? backupLayer : l));
+                      }
+                      setIsStylesModalOpen(false);
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-accent"
+                    onClick={() => setIsStylesModalOpen(false)}
+                  >
+                    Aceptar
+                  </button>
+                </div>
               </div>
             </div>
           </div>
