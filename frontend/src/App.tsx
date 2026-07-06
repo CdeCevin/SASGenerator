@@ -1,6 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import { Downloader } from './features/downloader/Downloader';
+import { useTheme } from './context/ThemeContext';
+
+interface ImageAdjustments {
+  brightness: number;  // 0–200, 100 = normal
+  contrast: number;    // 0–200, 100 = normal
+  saturation: number;  // 0–200, 100 = normal
+  hue: number;         // -180 to 180, 0 = normal
+  blur: number;        // 0–20 px
+}
 
 interface Layer {
   id: string;
@@ -19,13 +28,47 @@ interface Layer {
   borderWidth?: number;
   fontSize?: number;
   fontFamily?: string;
+  textBackgroundColor?: string; // Fondo opcional detrás del texto
   // Campos de Imagen
   imageUrl?: string;
+  adjustments?: ImageAdjustments; // Ajustes de color (mini-photoshop)
 }
+
+// Ajustes "neutros" — equivalen a no aplicar ningún filtro CSS.
+const defaultAdjustments = (): ImageAdjustments => ({
+  brightness: 100,
+  contrast: 100,
+  saturation: 100,
+  hue: 0,
+  blur: 0,
+});
+
+// Convierte los ajustes a un string CSS `filter` o a un string para `ctx.filter`.
+// Devuelve cadena vacía si todos los valores son neutros (no aplicar nada).
+const adjustmentsToFilter = (a?: ImageAdjustments): string => {
+  if (!a) return '';
+  const isDefault =
+    a.brightness === 100 &&
+    a.contrast === 100 &&
+    a.saturation === 100 &&
+    a.hue === 0 &&
+    a.blur === 0;
+  if (isDefault) return '';
+  return [
+    `brightness(${a.brightness}%)`,
+    `contrast(${a.contrast}%)`,
+    `saturate(${a.saturation}%)`,
+    `hue-rotate(${a.hue}deg)`,
+    a.blur > 0 ? `blur(${a.blur}px)` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+};
 
 type TabType = 'remover' | 'meme' | 'downloader';
 
 export default function App() {
+  const { theme, toggleTheme, ThemeIcon } = useTheme();
   const [activeTab, setActiveTab] = useState<TabType>('meme');
   const [apiUrl] = useState<string>(() => {
     return localStorage.getItem('hf_space_url') || import.meta.env.VITE_API_URL || 'https://cdecevin-sasgenerator.hf.space';
@@ -51,6 +94,11 @@ export default function App() {
   const [canvasHeight, setCanvasHeight] = useState<number>(700);
   const [layers, setLayers] = useState<Layer[]>([]);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
+  // Capa cuyo texto se está editando en línea (textarea overlay).
+  // Cuando es null, las capas de texto se renderizan como divs (modo display).
+  const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
+  // ID de la capa cuyo menú de 3 puntos está abierto (popover).
+  const [layerMenuOpenId, setLayerMenuOpenId] = useState<string | null>(null);
   const [canvasBackground, setCanvasBackground] = useState<{
     type: 'color' | 'image';
     value: string;
@@ -168,6 +216,26 @@ export default function App() {
       window.removeEventListener('drop', preventDefault);
     };
   }, []);
+
+  // Cerrar el menú de 3 puntos de capa al hacer clic fuera o pulsar Escape.
+  useEffect(() => {
+    if (!layerMenuOpenId) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('.layer-menu')) return;
+      if (target?.closest('.icon-btn[aria-haspopup="menu"]')) return;
+      setLayerMenuOpenId(null);
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLayerMenuOpenId(null);
+    };
+    window.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('keydown', handleKey);
+    return () => {
+      window.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('keydown', handleKey);
+    };
+  }, [layerMenuOpenId]);
 
   // --- PEGAR DESDE EL PORTAPAPELES (global) ---
   // - Imagen: en Quitar Fondo → fuente; en Meme → capa de imagen
@@ -424,6 +492,8 @@ export default function App() {
     setLayers([newLayer, ...layers]);
     setLayerCounter(prev => prev + 1);
     setSelectedLayerId(newLayer.id);
+    // Entrar en modo edición inmediatamente para que el usuario pueda tipar.
+    setEditingLayerId(newLayer.id);
   };
 
   const handleAddText = () => {
@@ -462,6 +532,72 @@ export default function App() {
       };
       reader.readAsDataURL(files[0]);
     }
+  };
+
+  // --- Manipulación de capas (usada por el menú de 3 puntos) ---
+  const duplicateLayer = (id: string) => {
+    const layer = layers.find((l) => l.id === id);
+    if (!layer) return;
+    saveHistory(layers);
+    const copy: Layer = {
+      ...layer,
+      id: `${layer.type === 'text' ? 'txt' : 'img'}_${layerCounter}`,
+      name: layer.name + ' (copia)',
+      x: layer.x + 20,
+      y: layer.y + 20,
+      zIndex: layers.length + 1,
+    };
+    setLayers([copy, ...layers]);
+    setLayerCounter((prev) => prev + 1);
+    setSelectedLayerId(copy.id);
+  };
+
+  const bringToFront = (id: string) => {
+    const maxZ = Math.max(...layers.map((l) => l.zIndex), 0);
+    saveHistory(layers);
+    setLayers((prev) =>
+      prev.map((l) => (l.id === id ? { ...l, zIndex: maxZ + 1 } : l))
+    );
+  };
+
+  const sendToBack = (id: string) => {
+    const minZ = Math.min(...layers.map((l) => l.zIndex), 0);
+    saveHistory(layers);
+    setLayers((prev) =>
+      prev.map((l) => (l.id === id ? { ...l, zIndex: minZ - 1 } : l))
+    );
+  };
+
+  const moveLayerUp = (id: string) => {
+    const sorted = [...layers].sort((a, b) => a.zIndex - b.zIndex);
+    const idx = sorted.findIndex((l) => l.id === id);
+    if (idx === -1 || idx === sorted.length - 1) return;
+    saveHistory(layers);
+    const a = sorted[idx];
+    const b = sorted[idx + 1];
+    setLayers((prev) =>
+      prev.map((l) => {
+        if (l.id === a.id) return { ...l, zIndex: b.zIndex };
+        if (l.id === b.id) return { ...l, zIndex: a.zIndex };
+        return l;
+      })
+    );
+  };
+
+  const moveLayerDown = (id: string) => {
+    const sorted = [...layers].sort((a, b) => a.zIndex - b.zIndex);
+    const idx = sorted.findIndex((l) => l.id === id);
+    if (idx <= 0) return;
+    saveHistory(layers);
+    const a = sorted[idx];
+    const b = sorted[idx - 1];
+    setLayers((prev) =>
+      prev.map((l) => {
+        if (l.id === a.id) return { ...l, zIndex: b.zIndex };
+        if (l.id === b.id) return { ...l, zIndex: a.zIndex };
+        return l;
+      })
+    );
   };
 
   const handleCanvasDragOver = (e: React.DragEvent) => {
@@ -875,11 +1011,16 @@ export default function App() {
       ctx.rotate((layer.rotation * Math.PI) / 180);
 
       if (layer.type === 'image' && layer.imageUrl) {
+        // Aplicar los ajustes de color de la capa al filtro del canvas.
+        // Se restaura a 'none' después para no afectar a las demás capas.
+        ctx.filter = adjustmentsToFilter(layer.adjustments) || 'none';
         try {
           const img = await loadImageAsync(layer.imageUrl);
           ctx.drawImage(img, -layer.width / 2, -layer.height / 2, layer.width, layer.height);
         } catch (e) {
           console.error("Error al cargar la imagen de la capa", layer.id, e);
+        } finally {
+          ctx.filter = 'none';
         }
       }
       else if (layer.type === 'text' && layer.text) {
@@ -1003,7 +1144,14 @@ export default function App() {
               Descargador
             </button>
           </nav>
-
+          <button
+            onClick={toggleTheme}
+            className="btn-theme-toggle"
+            title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+            aria-label="Alternar tema"
+          >
+            <ThemeIcon className="size-5" />
+          </button>
         </div>
       </header>
 
@@ -1177,58 +1325,96 @@ export default function App() {
                           onMouseDown={(e) => handleLayerMouseDown(e, layer.id)}
                         >
                           {layer.type === 'image' && layer.imageUrl && (
-                            <img 
-                              src={layer.imageUrl} 
-                              alt={layer.name} 
-                              style={{ width: '100%', height: '100%', objectFit: 'fill', pointerEvents: 'none' }}
+                            <img
+                              src={layer.imageUrl}
+                              alt={layer.name}
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'fill',
+                                pointerEvents: 'none',
+                                filter: adjustmentsToFilter(layer.adjustments),
+                              }}
                             />
                           )}
 
                           {layer.type === 'text' && (
-                            <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-                              {/* Texto trasero (Borde/Stroke) */}
-                              {layer.borderWidth && layer.borderWidth > 0 && (
-                                <div style={{
-                                  position: 'absolute',
-                                  top: 0,
-                                  left: 0,
-                                  width: '100%',
-                                  height: '100%',
-                                  color: layer.borderColor,
-                                  WebkitTextStroke: `${layer.borderWidth * 2}px ${layer.borderColor}`,
-                                  fontFamily: layer.fontFamily,
-                                  fontSize: `${layer.fontSize}px`,
-                                  fontWeight: 'bold',
-                                  textAlign: 'center',
-                                  whiteSpace: 'pre-wrap',
-                                  lineHeight: 1.1,
-                                  display: 'flex',
-                                  justifyContent: 'center',
-                                  alignItems: 'center',
-                                }}>
-                                  {layer.text}
-                                </div>
+                            <div
+                              style={{ position: 'relative', width: '100%', height: '100%' }}
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedLayerId(layer.id);
+                                setEditingLayerId(layer.id);
+                              }}
+                            >
+                              {/* Fondo opcional detrás del texto */}
+                              {layer.textBackgroundColor && (
+                                <div
+                                  style={{
+                                    position: 'absolute',
+                                    inset: '6%',
+                                    background: layer.textBackgroundColor,
+                                    borderRadius: 6,
+                                    pointerEvents: 'none',
+                                  }}
+                                />
                               )}
-                              {/* Texto delantero (Relleno) */}
-                              <div style={{
-                                position: 'absolute',
-                                top: 0,
-                                  left: 0,
-                                  width: '100%',
-                                  height: '100%',
-                                color: layer.color,
-                                fontFamily: layer.fontFamily,
-                                fontSize: `${layer.fontSize}px`,
-                                fontWeight: 'bold',
-                                textAlign: 'center',
-                                whiteSpace: 'pre-wrap',
-                                lineHeight: 1.1,
-                                display: 'flex',
-                                justifyContent: 'center',
-                                alignItems: 'center',
-                              }}>
-                                {layer.text}
-                              </div>
+
+                              {editingLayerId === layer.id ? (
+                                <TextLayerEditor
+                                  layer={layer}
+                                  onChange={(text) => updateSelectedLayer({ text })}
+                                  onCommit={() => setEditingLayerId(null)}
+                                />
+                              ) : (
+                                <>
+                                  {/* Texto trasero (Borde/Stroke) */}
+                                  {layer.borderWidth && layer.borderWidth > 0 && (
+                                    <div style={{
+                                      position: 'absolute',
+                                      top: 0,
+                                      left: 0,
+                                      width: '100%',
+                                      height: '100%',
+                                      color: layer.borderColor,
+                                      WebkitTextStroke: `${layer.borderWidth * 2}px ${layer.borderColor}`,
+                                      fontFamily: layer.fontFamily,
+                                      fontSize: `${layer.fontSize}px`,
+                                      fontWeight: 'bold',
+                                      textAlign: 'center',
+                                      whiteSpace: 'pre-wrap',
+                                      lineHeight: 1.1,
+                                      display: 'flex',
+                                      justifyContent: 'center',
+                                      alignItems: 'center',
+                                      pointerEvents: 'none',
+                                    }}>
+                                      {layer.text}
+                                    </div>
+                                  )}
+                                  {/* Texto delantero (Relleno) */}
+                                  <div style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    color: layer.color,
+                                    fontFamily: layer.fontFamily,
+                                    fontSize: `${layer.fontSize}px`,
+                                    fontWeight: 'bold',
+                                    textAlign: 'center',
+                                    whiteSpace: 'pre-wrap',
+                                    lineHeight: 1.1,
+                                    display: 'flex',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    pointerEvents: 'none',
+                                  }}>
+                                    {layer.text}
+                                  </div>
+                                </>
+                              )}
                             </div>
                           )}
 
@@ -1343,11 +1529,90 @@ export default function App() {
                             </div>
                           )}
                           <span className="layer-info">{layer.name}</span>
-                          <div className="layer-actions" onClick={e => e.stopPropagation()}>
+                          <div className="layer-actions" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className="icon-btn"
+                              onClick={() =>
+                                setLayerMenuOpenId(
+                                  layerMenuOpenId === layer.id ? null : layer.id
+                                )
+                              }
+                              title="Más opciones"
+                              aria-label="Más opciones de capa"
+                              aria-haspopup="menu"
+                              aria-expanded={layerMenuOpenId === layer.id}
+                            >
+                              ⋮
+                            </button>
                             <button className="icon-btn danger" onClick={() => handleDeleteLayer(layer.id)} title="Borrar capa" style={{ fontSize: '10px', fontWeight: 'bold' }}>
                               BORRAR
                             </button>
                           </div>
+
+                          {layerMenuOpenId === layer.id && (
+                            <div
+                              className="layer-menu animate-fade-in"
+                              role="menu"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                className="layer-menu-item"
+                                onClick={() => {
+                                  duplicateLayer(layer.id);
+                                  setLayerMenuOpenId(null);
+                                }}
+                              >
+                                Duplicar capa
+                              </button>
+                              <button
+                                className="layer-menu-item"
+                                onClick={() => {
+                                  bringToFront(layer.id);
+                                  setLayerMenuOpenId(null);
+                                }}
+                              >
+                                Traer al frente
+                              </button>
+                              <button
+                                className="layer-menu-item"
+                                onClick={() => {
+                                  sendToBack(layer.id);
+                                  setLayerMenuOpenId(null);
+                                }}
+                              >
+                                Enviar al fondo
+                              </button>
+                              <div className="layer-menu-separator" />
+                              <button
+                                className="layer-menu-item"
+                                onClick={() => {
+                                  moveLayerUp(layer.id);
+                                  setLayerMenuOpenId(null);
+                                }}
+                              >
+                                Subir una posición
+                              </button>
+                              <button
+                                className="layer-menu-item"
+                                onClick={() => {
+                                  moveLayerDown(layer.id);
+                                  setLayerMenuOpenId(null);
+                                }}
+                              >
+                                Bajar una posición
+                              </button>
+                              <div className="layer-menu-separator" />
+                              <button
+                                className="layer-menu-item danger"
+                                onClick={() => {
+                                  handleDeleteLayer(layer.id);
+                                  setLayerMenuOpenId(null);
+                                }}
+                              >
+                                Eliminar capa
+                              </button>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -1431,15 +1696,44 @@ export default function App() {
                       <div className="form-group">
                         <label>Grosor del Borde</label>
                         <div className="range-control-group">
-                          <input 
-                            type="range" 
-                            min="0" 
-                            max="20" 
-                            value={selectedLayer.borderWidth || 0} 
+                          <input
+                            type="range"
+                            min="0"
+                            max="20"
+                            value={selectedLayer.borderWidth || 0}
                             onChange={(e) => updateSelectedLayer({ borderWidth: Number(e.target.value) })}
                           />
                           <span>{selectedLayer.borderWidth}</span>
                         </div>
+                      </div>
+
+                      {/* Fondo opcional del texto */}
+                      <div className="form-group">
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(selectedLayer.textBackgroundColor)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                updateSelectedLayer({ textBackgroundColor: selectedLayer.textBackgroundColor || '#000000' });
+                              } else {
+                                const { textBackgroundColor: _, ...rest } = selectedLayer;
+                                updateSelectedLayer({ ...rest } as Partial<Layer>);
+                              }
+                            }}
+                          />
+                          Fondo del texto
+                        </label>
+                        {selectedLayer.textBackgroundColor && (
+                          <div className="color-input-wrapper">
+                            <input
+                              type="color"
+                              value={selectedLayer.textBackgroundColor}
+                              onChange={(e) => updateSelectedLayer({ textBackgroundColor: e.target.value })}
+                            />
+                            <span>Color</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1452,15 +1746,63 @@ export default function App() {
                       <p>Rotación: {Math.round(selectedLayer.rotation)}°</p>
                       <div className="form-group" style={{ marginTop: '10px' }}>
                         <label>Cambiar Tamaño Ancho</label>
-                        <input 
-                          type="number" 
-                          value={Math.round(selectedLayer.width)} 
+                        <input
+                          type="number"
+                          value={Math.round(selectedLayer.width)}
                           onChange={(e) => {
                             const w = Math.max(10, Number(e.target.value));
                             const aspect = selectedLayer.width / selectedLayer.height;
                             updateSelectedLayer({ width: w, height: w / aspect });
                           }}
                         />
+                      </div>
+
+                      {/* Ajustes de color (mini-photoshop) */}
+                      <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', marginTop: '8px' }}>
+                        <span style={{ display: 'block', fontWeight: 600, marginBottom: '8px', color: 'var(--primary-hover)', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.08em' }}>
+                          Ajustes de color
+                        </span>
+
+                        {(
+                          [
+                            { key: 'brightness', label: 'Brillo', min: 0, max: 200, step: 1 },
+                            { key: 'contrast', label: 'Contraste', min: 0, max: 200, step: 1 },
+                            { key: 'saturation', label: 'Saturación', min: 0, max: 200, step: 1 },
+                            { key: 'hue', label: 'Tono', min: -180, max: 180, step: 1 },
+                            { key: 'blur', label: 'Desenfoque', min: 0, max: 20, step: 0.5 },
+                          ] as const
+                        ).map(({ key, label, min, max, step }) => {
+                          const value = selectedLayer.adjustments?.[key] ?? (
+                            key === 'hue' ? 0 : 100
+                          );
+                          return (
+                            <div key={key} className="form-group" style={{ marginBottom: '8px' }}>
+                              <div className="range-control-group">
+                                <input
+                                  type="range"
+                                  min={min}
+                                  max={max}
+                                  step={step}
+                                  value={value}
+                                  onChange={(e) => {
+                                    const next = { ...(selectedLayer.adjustments ?? defaultAdjustments()), [key]: Number(e.target.value) };
+                                    updateSelectedLayer({ adjustments: next });
+                                  }}
+                                />
+                                <span style={{ minWidth: 36, textAlign: 'right' }}>{value}{key === 'hue' ? '°' : key === 'blur' ? 'px' : '%'}</span>
+                              </div>
+                              <label style={{ fontSize: '11px', marginTop: '2px' }}>{label}</label>
+                            </div>
+                          );
+                        })}
+
+                        <button
+                          className="btn btn-secondary"
+                          style={{ width: '100%', padding: '6px', fontSize: '11px', marginTop: '4px' }}
+                          onClick={() => updateSelectedLayer({ adjustments: defaultAdjustments() })}
+                        >
+                          Restablecer ajustes
+                        </button>
                       </div>
                     </div>
                   )}
@@ -1511,5 +1853,78 @@ export default function App() {
         )}
       </main>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* TextLayerEditor — textarea overlay que reemplaza al texto cuando la  */
+/* capa está en modo edición. Auto-focus, Enter/Esc para salir.        */
+/* ------------------------------------------------------------------ */
+
+interface TextLayerEditorProps {
+  layer: Layer;
+  onChange: (text: string) => void;
+  onCommit: () => void;
+}
+
+function TextLayerEditor({ layer, onChange, onCommit }: TextLayerEditorProps) {
+  const ref = React.useRef<HTMLTextAreaElement | null>(null);
+
+  React.useEffect(() => {
+    const ta = ref.current;
+    if (!ta) return;
+    ta.focus();
+    ta.select();
+  }, []);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      onCommit();
+    }
+    // Enter sin Shift confirma la edición; Shift+Enter inserta salto de línea.
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      onCommit();
+    }
+  };
+
+  return (
+    <textarea
+      ref={ref}
+      defaultValue={layer.text ?? ''}
+      onChange={(e) => onChange(e.target.value)}
+      onBlur={onCommit}
+      onKeyDown={handleKeyDown}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      spellCheck={false}
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        background: 'transparent',
+        color: layer.color,
+        WebkitTextStroke: layer.borderWidth
+          ? `${layer.borderWidth * 2}px ${layer.borderColor}`
+          : undefined,
+        fontFamily: layer.fontFamily,
+        fontSize: `${layer.fontSize}px`,
+        fontWeight: 'bold',
+        textAlign: 'center',
+        lineHeight: 1.1,
+        padding: 0,
+        margin: 0,
+        border: 'none',
+        outline: 'none',
+        resize: 'none',
+        backgroundColor: 'transparent',
+        caretColor: layer.color,
+        overflow: 'hidden',
+        zIndex: 2,
+      }}
+    />
   );
 }

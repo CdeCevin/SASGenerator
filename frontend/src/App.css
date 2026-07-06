@@ -98,7 +98,7 @@
 }
 
 .panel {
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-panel);
   border: 2px dashed var(--border-color);
   border-radius: 10px;
   min-height: 480px;
@@ -278,7 +278,7 @@
   flex-direction: column;
   align-items: center;
   gap: 15px;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--bg-panel);
   border-radius: 10px;
   padding: 20px;
   min-height: 620px;
@@ -308,9 +308,9 @@
 
 .canvas-size-input-group input {
   width: 65px;
-  background: #090a0f;
+  background: var(--bg-input);
   border: 1px solid var(--border-color);
-  color: #fff;
+  color: var(--text-input);
   padding: 4px 8px;
   border-radius: 6px;
   text-align: center;
@@ -429,7 +429,7 @@
 /* Sidebar Control */
 .control-sidebar {
   width: 330px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-panel);
   border: 1px solid var(--border-color);
   border-radius: 10px;
   padding: 20px;
@@ -477,9 +477,9 @@
 .layer-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
   padding: 10px 14px;
-  background: #10121a;
+  background: var(--bg-item);
   border: 1px solid var(--border-color);
   border-radius: 8px;
   font-size: 13px;
@@ -566,6 +566,54 @@
   color: var(--danger);
 }
 
+/* Layer menu (3-dot) */
+.layer-menu {
+  position: absolute;
+  right: 8px;
+  top: calc(100% + 4px);
+  min-width: 180px;
+  background: #11131c;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  z-index: 50;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.layer-menu-item {
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  padding: 8px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  font-family: inherit;
+}
+
+.layer-menu-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.layer-menu-item.danger {
+  color: var(--danger);
+}
+
+.layer-menu-item.danger:hover {
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.layer-menu-separator {
+  height: 1px;
+  background: var(--border-color);
+  margin: 4px 2px;
+}
+
 /* Inputs & Form controls */
 .form-group {
   display: flex;
@@ -583,9 +631,9 @@
 .form-group input[type="number"],
 .form-group textarea,
 .form-group select {
-  background: #090a0f;
+  background: var(--bg-input);
   border: 1px solid var(--border-color);
-  color: #fff;
+  color: var(--text-input);
   padding: 8px 12px;
   border-radius: 8px;
   font-size: 13px;
@@ -631,7 +679,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  background: #090a0f;
+  background: var(--bg-input);
   border: 1px solid var(--border-color);
   padding: 4px 10px;
   border-radius: 8px;
@@ -668,13 +716,13 @@
 }
 
 .settings-modal {
-  background: #11131c;
+  background: var(--bg-modal);
   border: 1px solid var(--border-color);
   border-radius: 12px;
   width: 90%;
   max-width: 500px;
   padding: 24px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 20px 40px var(--shadow-modal);
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -799,10 +847,10 @@
   height: 48px;
   padding-left: 44px;
   padding-right: 16px;
-  background: #090a0f;
+  background: var(--bg-input);
   border: 1px solid var(--border-color);
+  color: var(--text-input);
   border-radius: 8px;
-  color: #fff;
   font-size: 15px;
   font-family: inherit;
   transition: all 0.2s ease;
@@ -923,10 +971,10 @@
   width: 100%;
   height: 56px;
   padding: 0 16px;
-  background: #090a0f;
+  background: var(--bg-input);
   border: 1px solid var(--border-color);
+  color: var(--text-input);
   border-radius: 8px;
-  color: #fff;
   font-size: 15px;
   font-family: inherit;
   transition: all 0.2s ease;
@@ -1032,4 +1080,25 @@
 .downloader-btn-cancel:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Theme Toggle Button */
+.btn-theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: var(--text-primary);
+}
+
+.btn-theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--primary);
+  box-shadow: 0 0 10px var(--primary-glow);
 }

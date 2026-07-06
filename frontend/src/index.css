@@ -6,6 +6,85 @@
    Studio palette — semantic tokens for shadcn/ui components
    ============================================================ */
 :root {
+  /* ============================================================
+     Light Theme (Default)
+     ============================================================ */
+  --background: #f8fafc;
+  --foreground: #0f172a;
+
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+
+  --primary: #7C6CF6;
+  --primary-foreground: #FFFFFF;
+
+  --secondary: #06b6d4;
+  --secondary-foreground: #ffffff;
+
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
+
+  --destructive: #ef4444;
+  --destructive-foreground: #FFFFFF;
+
+  --border: rgba(15, 23, 42, 0.08);
+  --input: rgba(15, 23, 42, 0.06);
+  --ring: #7C6CF6;
+
+  --radius: 0.5rem;
+
+  /* Legacy tokens kept for compatibility with current code */
+  --bg-main: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f1f5f9;
+  --border-color: rgba(15, 23, 42, 0.08);
+  --border-focus: rgba(124, 108, 246, 0.5);
+
+  --primary-hover: #6366f1;
+  --primary-glow: rgba(124, 108, 246, 0.15);
+
+  --secondary-hover: #0891b2;
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+
+  --success: #10b981;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+
+  /* App custom variables */
+  --bg-input: #f1f5f9;
+  --text-input: #0f172a;
+  --bg-item: #ffffff;
+  --bg-panel: rgba(15, 23, 42, 0.03);
+  --bg-modal: #ffffff;
+  --shadow-modal: rgba(15, 23, 42, 0.08);
+  --bg-format-btn: rgba(15, 23, 42, 0.02);
+  --bg-format-icon: rgba(15, 23, 42, 0.05);
+
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: light;
+  color: var(--foreground);
+  background-color: var(--background);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.dark {
+  /* ============================================================
+     Dark Theme
+     ============================================================ */
   --background: #0B0D12;
   --foreground: #E5E7EB;
 
@@ -34,8 +113,6 @@
   --input: rgba(255, 255, 255, 0.08);
   --ring: #7C6CF6;
 
-  --radius: 0.5rem;
-
   /* Legacy tokens kept for compatibility with current code */
   --bg-main: #0B0D12;
   --bg-card: #14171F;
@@ -56,16 +133,17 @@
   --danger: #ef4444;
   --warning: #f59e0b;
 
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+  /* App custom variables */
+  --bg-input: #090a0f;
+  --text-input: #ffffff;
+  --bg-item: #10121a;
+  --bg-panel: rgba(0, 0, 0, 0.2);
+  --bg-modal: #11131c;
+  --shadow-modal: rgba(0, 0, 0, 0.4);
+  --bg-format-btn: rgba(255, 255, 255, 0.02);
+  --bg-format-icon: rgba(255, 255, 255, 0.05);
+
   color-scheme: dark;
-  color: var(--foreground);
-  background-color: var(--background);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Respect users who prefer reduced motion */
@@ -217,4 +295,21 @@ body {
   font-weight: 600;
   font-size: 15px;
   text-shadow: 0 0 8px rgba(124, 108, 246, 0.4);
+}
+
+/* ============================================================
+   View Transitions API customization for smooth theme sweep
+   ============================================================ */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 9999;
 }
