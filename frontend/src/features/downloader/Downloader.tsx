@@ -34,9 +34,49 @@ const FORMAT_OPTIONS: FormatOption[] = [
   { value: "Audio", label: "Solo Audio", sublabel: "MP3", icon: Music2 },
 ]
 
+export function cleanYoutubeUrl(url: string): string {
+  const trimmed = url.trim();
+  try {
+    const urlObj = new URL(trimmed);
+    if (urlObj.hostname.includes("youtube.com") || urlObj.hostname.includes("youtu.be")) {
+      if (urlObj.pathname.includes("/watch")) {
+        const videoId = urlObj.searchParams.get("v");
+        if (videoId) {
+          return `https://www.youtube.com/watch?v=${videoId}`;
+        }
+      } else if (urlObj.hostname.includes("youtu.be")) {
+        const videoId = urlObj.pathname.split("/")[1];
+        if (videoId) {
+          return `https://youtu.be/${videoId}`;
+        }
+      } else if (urlObj.pathname.includes("/shorts/")) {
+        const parts = urlObj.pathname.split("/");
+        const idx = parts.indexOf("shorts");
+        if (idx !== -1 && parts[idx + 1]) {
+          return `https://www.youtube.com/shorts/${parts[idx + 1]}`;
+        }
+      }
+    }
+  } catch (e) {
+    if (trimmed.includes("youtube.com/watch")) {
+      const match = trimmed.match(/[?&]v=([^&#\s]+)/);
+      if (match?.[1]) {
+        return `https://www.youtube.com/watch?v=${match[1]}`;
+      }
+    } else if (trimmed.includes("youtu.be/")) {
+      const parts = trimmed.split("youtu.be/");
+      if (parts[1]) {
+        const id = parts[1].split(/[?&#\s]/)[0];
+        return `https://youtu.be/${id}`;
+      }
+    }
+  }
+  return trimmed;
+}
+
 export function Downloader({ apiUrl, formUrl, onFormUrlChange }: DownloaderProps) {
   const ytUrl = formUrl
-  const setYtUrl = onFormUrlChange
+  const setYtUrl = (val: string) => onFormUrlChange(cleanYoutubeUrl(val))
   const [isFetchingFormats, setIsFetchingFormats] = useState<boolean>(false)
   const [formats, setFormats] = useState<string[]>([])
   const [downloadFormat, setDownloadFormat] = useState<DownloadFormat>("Video")

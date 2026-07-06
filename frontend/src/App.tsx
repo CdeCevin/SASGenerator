@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ChevronUp, Trash2 } from 'lucide-react';
 import './App.css';
-import { Downloader } from './features/downloader/Downloader';
+import { Downloader, cleanYoutubeUrl } from './features/downloader/Downloader';
 import { useTheme } from './context/ThemeContext';
 
 interface ImageAdjustments {
@@ -372,7 +372,7 @@ export default function App() {
       if (isYoutubeUrl(text)) {
         e.preventDefault();
         setActiveTab('downloader');
-        setYtFormUrl(text.trim());
+        setYtFormUrl(cleanYoutubeUrl(text.trim()));
         return;
       }
 

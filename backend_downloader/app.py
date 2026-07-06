@@ -128,9 +128,35 @@ def diagnose(url: str = Query(...)):
         sys.stderr = original_stderr
     return {"results": results, "logs": output.getvalue()}
 
+def clean_youtube_url(url: str) -> str:
+    url = url.strip()
+    if "youtube.com" in url or "youtu.be" in url:
+        import urllib.parse as urlparse
+        try:
+            parsed = urlparse.urlparse(url)
+            if "watch" in parsed.path:
+                params = urlparse.parse_qs(parsed.query)
+                video_id = params.get('v')
+                if video_id:
+                    return f"https://www.youtube.com/watch?v={video_id[0]}"
+            elif "youtu.be" in parsed.netloc:
+                path_parts = parsed.path.strip("/").split("/")
+                if path_parts and path_parts[0]:
+                    return f"https://youtu.be/{path_parts[0]}"
+            elif "shorts" in parsed.path:
+                path_parts = parsed.path.strip("/").split("/")
+                if "shorts" in path_parts:
+                    idx = path_parts.index("shorts")
+                    if idx + 1 < len(path_parts):
+                        return f"https://www.youtube.com/shorts/{path_parts[idx + 1]}"
+        except Exception:
+            pass
+    return url
+
 @app.get("/fetch-formats")
 def fetch_formats(url: str = Query(..., description="URL del video de YouTube u otro portal")):
     """Obtiene los formatos y resoluciones de video disponibles."""
+    url = clean_youtube_url(url)
     chrome = ImpersonateTarget.from_str('chrome')
     strategies = [
         # Estrategia 1: android_vr y tv_embedded sin clientes web/móviles.
@@ -185,6 +211,7 @@ def download_video(
     IMPORTANTE: Nunca usar format='best' para video porque limita a 360p.
     Los streams de alta calidad (720p+) son separados y requieren fusion FFmpeg.
     """
+    url = clean_youtube_url(url)
     import uuid
 
     request_id = uuid.uuid4().hex
