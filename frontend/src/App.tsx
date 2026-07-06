@@ -968,8 +968,15 @@ export default function App() {
     };
   }, [activeAction, canvasScale, canvasWidth, canvasHeight, layers]);
 
-  // Deseleccionar al hacer clic fuera del lienzo
-  const handleCanvasContainerMouseDown = () => {
+  // Deseleccionar al hacer clic fuera del lienzo (evitando clics en la barra de desplazamiento)
+  const handleCanvasContainerMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const isVerticalScrollbarClick = e.clientX >= rect.left + e.currentTarget.clientWidth;
+    const isHorizontalScrollbarClick = e.clientY >= rect.top + e.currentTarget.clientHeight;
+    
+    if (isVerticalScrollbarClick || isHorizontalScrollbarClick) {
+      return;
+    }
     setSelectedLayerId(null);
   };
 
@@ -1781,73 +1788,79 @@ function LayerPropertiesPanel({ layer, onUpdate }: LayerPropertiesPanelProps) {
             </div>
           </div>
 
-          <div className="color-picker-row">
-            <div className="form-group">
-              <label>Color Letra</label>
-              <div className="color-input-wrapper">
-                <input
-                  type="color"
-                  value={layer.color || '#ffffff'}
-                  onChange={(e) => onUpdate({ color: e.target.value })}
-                />
-                <span>Fill</span>
+          {/* Sección unificada de Colores y Estilos de Texto */}
+          <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', marginTop: '8px' }}>
+            <span style={{ display: 'block', fontWeight: 600, marginBottom: '10px', color: 'var(--primary-hover)', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.08em' }}>
+              Colores y Estilos
+            </span>
+
+            <div className="color-picker-row">
+              <div className="form-group">
+                <label>Color Letra</label>
+                <div className="color-input-wrapper">
+                  <input
+                    type="color"
+                    value={layer.color || '#ffffff'}
+                    onChange={(e) => onUpdate({ color: e.target.value })}
+                  />
+                  <span>Relleno</span>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Color Borde</label>
+                <div className="color-input-wrapper">
+                  <input
+                    type="color"
+                    value={layer.borderColor || '#000000'}
+                    onChange={(e) => onUpdate({ borderColor: e.target.value })}
+                  />
+                  <span>Borde</span>
+                </div>
               </div>
             </div>
 
-            <div className="form-group">
-              <label>Color Borde</label>
-              <div className="color-input-wrapper">
+            <div className="form-group" style={{ marginTop: '10px' }}>
+              <label>Grosor del Borde</label>
+              <div className="range-control-group">
                 <input
-                  type="color"
-                  value={layer.borderColor || '#000000'}
-                  onChange={(e) => onUpdate({ borderColor: e.target.value })}
+                  type="range"
+                  min="0"
+                  max="20"
+                  value={layer.borderWidth || 0}
+                  onChange={(e) => onUpdate({ borderWidth: Number(e.target.value) })}
                 />
-                <span>Borde</span>
+                <span>{layer.borderWidth}</span>
               </div>
             </div>
-          </div>
 
-          <div className="form-group">
-            <label>Grosor del Borde</label>
-            <div className="range-control-group">
-              <input
-                type="range"
-                min="0"
-                max="20"
-                value={layer.borderWidth || 0}
-                onChange={(e) => onUpdate({ borderWidth: Number(e.target.value) })}
-              />
-              <span>{layer.borderWidth}</span>
-            </div>
-          </div>
-
-          {/* Fondo opcional del texto */}
-          <div className="form-group">
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input
-                type="checkbox"
-                checked={Boolean(layer.textBackgroundColor)}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    onUpdate({ textBackgroundColor: layer.textBackgroundColor || '#000000' });
-                  } else {
-                    const { textBackgroundColor: _, ...rest } = layer;
-                    onUpdate({ ...rest } as Partial<Layer>);
-                  }
-                }}
-              />
-              Fondo del texto
-            </label>
-            {layer.textBackgroundColor && (
-              <div className="color-input-wrapper">
+            <div className="form-group" style={{ marginTop: '10px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <input
-                  type="color"
-                  value={layer.textBackgroundColor}
-                  onChange={(e) => onUpdate({ textBackgroundColor: e.target.value })}
+                  type="checkbox"
+                  checked={Boolean(layer.textBackgroundColor)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      onUpdate({ textBackgroundColor: layer.textBackgroundColor || '#000000' });
+                    } else {
+                      const { textBackgroundColor: _, ...rest } = layer;
+                      onUpdate({ ...rest } as Partial<Layer>);
+                    }
+                  }}
                 />
-                <span>Color</span>
-              </div>
-            )}
+                Fondo del texto
+              </label>
+              {layer.textBackgroundColor && (
+                <div className="color-input-wrapper" style={{ marginTop: '6px' }}>
+                  <input
+                    type="color"
+                    value={layer.textBackgroundColor}
+                    onChange={(e) => onUpdate({ textBackgroundColor: e.target.value })}
+                  />
+                  <span>Color Fondo</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1870,10 +1883,10 @@ function LayerPropertiesPanel({ layer, onUpdate }: LayerPropertiesPanelProps) {
             />
           </div>
 
-          {/* Ajustes de imagen (mini-photoshop) */}
+          {/* Ajustes de Color de la Imagen */}
           <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', marginTop: '8px' }}>
             <span style={{ display: 'block', fontWeight: 600, marginBottom: '10px', color: 'var(--primary-hover)', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.08em' }}>
-              Ajustes de imagen
+              Ajustes de Color de la Imagen
             </span>
 
             {/* Presets al estilo Photoshop (Imagen > Ajustes) */}
