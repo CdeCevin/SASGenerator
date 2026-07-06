@@ -566,7 +566,7 @@
   color: var(--danger);
 }
 
-/* Arrow toggle del menú de capa — rota 180° al abrir */
+/* Arrow toggle de la capa — rota 180° al expandir las propiedades */
 .layer-menu-arrow {
   transition: transform 0.2s ease;
 }
@@ -575,52 +575,23 @@
   transform: rotate(180deg);
 }
 
-/* Layer menu (3-dot) */
-.layer-menu {
-  position: absolute;
-  right: 8px;
-  top: calc(100% + 4px);
-  min-width: 180px;
-  background: #11131c;
+/* Panel de propiedades inline (debajo de cada capa cuando se expande) */
+.layer-properties {
+  flex-basis: 100%;
+  background: rgba(255, 255, 255, 0.02);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-  z-index: 50;
-  padding: 4px;
+  padding: 12px;
+  margin-top: 8px;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 10px;
 }
 
-.layer-menu-item {
-  text-align: left;
-  background: transparent;
-  border: none;
-  color: var(--text-primary);
-  padding: 8px 10px;
-  font-size: 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.15s ease;
-  font-family: inherit;
-}
-
-.layer-menu-item:hover {
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.layer-menu-item.danger {
-  color: var(--danger);
-}
-
-.layer-menu-item.danger:hover {
-  background: rgba(239, 68, 68, 0.12);
-}
-
-.layer-menu-separator {
-  height: 1px;
-  background: var(--border-color);
-  margin: 4px 2px;
+.layer-properties .form-group label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 /* Inputs & Form controls */

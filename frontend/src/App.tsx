@@ -98,8 +98,8 @@ export default function App() {
   // Capa cuyo texto se está editando en línea (textarea overlay).
   // Cuando es null, las capas de texto se renderizan como divs (modo display).
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
-  // ID de la capa cuyo menú de 3 puntos está abierto (popover).
-  const [layerMenuOpenId, setLayerMenuOpenId] = useState<string | null>(null);
+  // ID de la capa cuyas propiedades están expandidas inline (botón flecha).
+  const [expandedLayerId, setExpandedLayerId] = useState<string | null>(null);
   const [canvasBackground, setCanvasBackground] = useState<{
     type: 'color' | 'image';
     value: string;
@@ -218,17 +218,17 @@ export default function App() {
     };
   }, []);
 
-  // Cerrar el menú de 3 puntos de capa al hacer clic fuera o pulsar Escape.
+  // Cerrar el panel de propiedades expandido al hacer clic fuera o pulsar Escape.
   useEffect(() => {
-    if (!layerMenuOpenId) return;
+    if (!expandedLayerId) return;
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
-      if (target?.closest('.layer-menu')) return;
-      if (target?.closest('.icon-btn[aria-haspopup="menu"]')) return;
-      setLayerMenuOpenId(null);
+      if (target?.closest('.layer-properties')) return;
+      if (target?.closest('.layer-menu-toggle')) return;
+      setExpandedLayerId(null);
     };
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setLayerMenuOpenId(null);
+      if (e.key === 'Escape') setExpandedLayerId(null);
     };
     window.addEventListener('mousedown', handleClickOutside);
     window.addEventListener('keydown', handleKey);
@@ -236,7 +236,7 @@ export default function App() {
       window.removeEventListener('mousedown', handleClickOutside);
       window.removeEventListener('keydown', handleKey);
     };
-  }, [layerMenuOpenId]);
+  }, [expandedLayerId]);
 
   // --- PEGAR DESDE EL PORTAPAPELES (global) ---
   // - Imagen: en Quitar Fondo → fuente; en Meme → capa de imagen
@@ -1532,16 +1532,15 @@ export default function App() {
                           <span className="layer-info">{layer.name}</span>
                           <div className="layer-actions" onClick={(e) => e.stopPropagation()}>
                             <button
-                              className={`icon-btn layer-menu-toggle ${layerMenuOpenId === layer.id ? 'is-open' : ''}`}
+                              className={`icon-btn layer-menu-toggle ${expandedLayerId === layer.id ? 'is-open' : ''}`}
                               onClick={() =>
-                                setLayerMenuOpenId(
-                                  layerMenuOpenId === layer.id ? null : layer.id
+                                setExpandedLayerId(
+                                  expandedLayerId === layer.id ? null : layer.id
                                 )
                               }
-                              title={layerMenuOpenId === layer.id ? 'Cerrar menú' : 'Más opciones'}
-                              aria-label="Más opciones de capa"
-                              aria-haspopup="menu"
-                              aria-expanded={layerMenuOpenId === layer.id}
+                              title={expandedLayerId === layer.id ? 'Ocultar propiedades' : 'Mostrar propiedades'}
+                              aria-label="Propiedades de capa"
+                              aria-expanded={expandedLayerId === layer.id}
                             >
                               <ChevronUp className="size-4 layer-menu-arrow" />
                             </button>
@@ -1555,267 +1554,24 @@ export default function App() {
                             </button>
                           </div>
 
-                          {layerMenuOpenId === layer.id && (
-                            <div
-                              className="layer-menu animate-fade-in"
-                              role="menu"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <button
-                                className="layer-menu-item"
-                                onClick={() => {
-                                  duplicateLayer(layer.id);
-                                  setLayerMenuOpenId(null);
-                                }}
-                              >
-                                Duplicar capa
-                              </button>
-                              <button
-                                className="layer-menu-item"
-                                onClick={() => {
-                                  bringToFront(layer.id);
-                                  setLayerMenuOpenId(null);
-                                }}
-                              >
-                                Traer al frente
-                              </button>
-                              <button
-                                className="layer-menu-item"
-                                onClick={() => {
-                                  sendToBack(layer.id);
-                                  setLayerMenuOpenId(null);
-                                }}
-                              >
-                                Enviar al fondo
-                              </button>
-                              <div className="layer-menu-separator" />
-                              <button
-                                className="layer-menu-item"
-                                onClick={() => {
-                                  moveLayerUp(layer.id);
-                                  setLayerMenuOpenId(null);
-                                }}
-                              >
-                                Subir una posición
-                              </button>
-                              <button
-                                className="layer-menu-item"
-                                onClick={() => {
-                                  moveLayerDown(layer.id);
-                                  setLayerMenuOpenId(null);
-                                }}
-                              >
-                                Bajar una posición
-                              </button>
-                              <div className="layer-menu-separator" />
-                              <button
-                                className="layer-menu-item danger"
-                                onClick={() => {
-                                  handleDeleteLayer(layer.id);
-                                  setLayerMenuOpenId(null);
-                                }}
-                              >
-                                Eliminar capa
-                              </button>
-                            </div>
+                          {expandedLayerId === layer.id && (
+                            <LayerPropertiesPanel
+                              layer={layer}
+                              onUpdate={(updates) => {
+                                setLayers((prev) =>
+                                  prev.map((l) => (l.id === layer.id ? { ...l, ...updates } : l))
+                                );
+                              }}
+                            />
                           )}
                         </div>
                       );
                     })}
-                  </div>
-                )}
-              </div>
+                   </div>
+                 )}
+               </div>
 
-              {/* Propiedades de Capa Seleccionada */}
-              {selectedLayer && (
-                <div className="sidebar-section animate-fade-in" style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                  <span className="section-title" style={{ color: 'var(--primary-hover)' }}>Propiedades de Capa</span>
-                  
-                  {/* Propiedades si es texto */}
-                  {selectedLayer.type === 'text' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      <div className="form-group">
-                        <label>Contenido del Texto</label>
-                        <textarea 
-                          rows={3} 
-                          value={selectedLayer.text || ''} 
-                          onChange={(e) => updateSelectedLayer({ text: e.target.value })}
-                        />
-                      </div>
-
-                      <div className="form-group">
-                        <label>Tipografía</label>
-                        <select 
-                          value={selectedLayer.fontFamily || 'Impact'} 
-                          onChange={(e) => updateSelectedLayer({ fontFamily: e.target.value })}
-                        >
-                          <option value="Impact">Impact (Meme)</option>
-                          <option value="Arial">Arial</option>
-                          <option value="Courier New">Courier New</option>
-                          <option value="Comic Sans MS">Comic Sans</option>
-                          <option value="Georgia">Georgia</option>
-                          <option value="Outfit">Outfit (Moderna)</option>
-                          <option value="Inter">Inter</option>
-                        </select>
-                      </div>
-
-                      <div className="form-group">
-                        <label>Tamaño de Letra</label>
-                        <div className="range-control-group">
-                          <input 
-                            type="range" 
-                            min="10" 
-                            max="150" 
-                            value={selectedLayer.fontSize || 40} 
-                            onChange={(e) => updateSelectedLayer({ fontSize: Number(e.target.value) })}
-                          />
-                          <span>{selectedLayer.fontSize}px</span>
-                        </div>
-                      </div>
-
-                      <div className="color-picker-row">
-                        <div className="form-group">
-                          <label>Color Letra</label>
-                          <div className="color-input-wrapper">
-                            <input 
-                              type="color" 
-                              value={selectedLayer.color || '#ffffff'} 
-                              onChange={(e) => updateSelectedLayer({ color: e.target.value })}
-                            />
-                            <span>Fill</span>
-                          </div>
-                        </div>
-
-                        <div className="form-group">
-                          <label>Color Borde</label>
-                          <div className="color-input-wrapper">
-                            <input 
-                              type="color" 
-                              value={selectedLayer.borderColor || '#000000'} 
-                              onChange={(e) => updateSelectedLayer({ borderColor: e.target.value })}
-                            />
-                            <span>Borde</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="form-group">
-                        <label>Grosor del Borde</label>
-                        <div className="range-control-group">
-                          <input
-                            type="range"
-                            min="0"
-                            max="20"
-                            value={selectedLayer.borderWidth || 0}
-                            onChange={(e) => updateSelectedLayer({ borderWidth: Number(e.target.value) })}
-                          />
-                          <span>{selectedLayer.borderWidth}</span>
-                        </div>
-                      </div>
-
-                      {/* Fondo opcional del texto */}
-                      <div className="form-group">
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <input
-                            type="checkbox"
-                            checked={Boolean(selectedLayer.textBackgroundColor)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                updateSelectedLayer({ textBackgroundColor: selectedLayer.textBackgroundColor || '#000000' });
-                              } else {
-                                const { textBackgroundColor: _, ...rest } = selectedLayer;
-                                updateSelectedLayer({ ...rest } as Partial<Layer>);
-                              }
-                            }}
-                          />
-                          Fondo del texto
-                        </label>
-                        {selectedLayer.textBackgroundColor && (
-                          <div className="color-input-wrapper">
-                            <input
-                              type="color"
-                              value={selectedLayer.textBackgroundColor}
-                              onChange={(e) => updateSelectedLayer({ textBackgroundColor: e.target.value })}
-                            />
-                            <span>Color</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Propiedades si es imagen */}
-                  {selectedLayer.type === 'image' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                      <p>Tipo: Imagen</p>
-                      <p>Dimensiones: {Math.round(selectedLayer.width)}x{Math.round(selectedLayer.height)} px</p>
-                      <p>Rotación: {Math.round(selectedLayer.rotation)}°</p>
-                      <div className="form-group" style={{ marginTop: '10px' }}>
-                        <label>Cambiar Tamaño Ancho</label>
-                        <input
-                          type="number"
-                          value={Math.round(selectedLayer.width)}
-                          onChange={(e) => {
-                            const w = Math.max(10, Number(e.target.value));
-                            const aspect = selectedLayer.width / selectedLayer.height;
-                            updateSelectedLayer({ width: w, height: w / aspect });
-                          }}
-                        />
-                      </div>
-
-                      {/* Ajustes de color (mini-photoshop) */}
-                      <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', marginTop: '8px' }}>
-                        <span style={{ display: 'block', fontWeight: 600, marginBottom: '8px', color: 'var(--primary-hover)', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.08em' }}>
-                          Ajustes de color
-                        </span>
-
-                        {(
-                          [
-                            { key: 'brightness', label: 'Brillo', min: 0, max: 200, step: 1 },
-                            { key: 'contrast', label: 'Contraste', min: 0, max: 200, step: 1 },
-                            { key: 'saturation', label: 'Saturación', min: 0, max: 200, step: 1 },
-                            { key: 'hue', label: 'Tono', min: -180, max: 180, step: 1 },
-                            { key: 'blur', label: 'Desenfoque', min: 0, max: 20, step: 0.5 },
-                          ] as const
-                        ).map(({ key, label, min, max, step }) => {
-                          const value = selectedLayer.adjustments?.[key] ?? (
-                            key === 'hue' ? 0 : 100
-                          );
-                          return (
-                            <div key={key} className="form-group" style={{ marginBottom: '8px' }}>
-                              <div className="range-control-group">
-                                <input
-                                  type="range"
-                                  min={min}
-                                  max={max}
-                                  step={step}
-                                  value={value}
-                                  onChange={(e) => {
-                                    const next = { ...(selectedLayer.adjustments ?? defaultAdjustments()), [key]: Number(e.target.value) };
-                                    updateSelectedLayer({ adjustments: next });
-                                  }}
-                                />
-                                <span style={{ minWidth: 36, textAlign: 'right' }}>{value}{key === 'hue' ? '°' : key === 'blur' ? 'px' : '%'}</span>
-                              </div>
-                              <label style={{ fontSize: '11px', marginTop: '2px' }}>{label}</label>
-                            </div>
-                          );
-                        })}
-
-                        <button
-                          className="btn btn-secondary"
-                          style={{ width: '100%', padding: '6px', fontSize: '11px', marginTop: '4px' }}
-                          onClick={() => updateSelectedLayer({ adjustments: defaultAdjustments() })}
-                        >
-                          Restablecer ajustes
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Botones de acción del Lienzo */}
+               {/* Botones de acción del Lienzo */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: 'auto', paddingTop: '15px', borderTop: '1px solid var(--border-color)' }}>
                 <button className="btn btn-accent" onClick={handleExportMeme} disabled={layers.length === 0}>
                   Exportar Meme (PNG)
@@ -1932,5 +1688,202 @@ function TextLayerEditor({ layer, onChange, onCommit }: TextLayerEditorProps) {
         zIndex: 2,
       }}
     />
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* LayerPropertiesPanel — panel de propiedades reusable. Se renderiza  */
+/* inline debajo de cada capa cuando se expande con la flecha, y      */
+/* también en la barra lateral para la capa seleccionada.              */
+/* ------------------------------------------------------------------ */
+
+interface LayerPropertiesPanelProps {
+  layer: Layer;
+  onUpdate: (updates: Partial<Layer>) => void;
+}
+
+function LayerPropertiesPanel({ layer, onUpdate }: LayerPropertiesPanelProps) {
+  return (
+    <div className="layer-properties animate-fade-in">
+      {layer.type === 'text' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div className="form-group">
+            <label>Contenido del Texto</label>
+            <textarea
+              rows={3}
+              value={layer.text || ''}
+              onChange={(e) => onUpdate({ text: e.target.value })}
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Tipografía</label>
+            <select
+              value={layer.fontFamily || 'Impact'}
+              onChange={(e) => onUpdate({ fontFamily: e.target.value })}
+            >
+              <option value="Impact">Impact (Meme)</option>
+              <option value="Arial">Arial</option>
+              <option value="Courier New">Courier New</option>
+              <option value="Comic Sans MS">Comic Sans</option>
+              <option value="Georgia">Georgia</option>
+              <option value="Outfit">Outfit (Moderna)</option>
+              <option value="Inter">Inter</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label>Tamaño de Letra</label>
+            <div className="range-control-group">
+              <input
+                type="range"
+                min="10"
+                max="150"
+                value={layer.fontSize || 40}
+                onChange={(e) => onUpdate({ fontSize: Number(e.target.value) })}
+              />
+              <span>{layer.fontSize}px</span>
+            </div>
+          </div>
+
+          <div className="color-picker-row">
+            <div className="form-group">
+              <label>Color Letra</label>
+              <div className="color-input-wrapper">
+                <input
+                  type="color"
+                  value={layer.color || '#ffffff'}
+                  onChange={(e) => onUpdate({ color: e.target.value })}
+                />
+                <span>Fill</span>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>Color Borde</label>
+              <div className="color-input-wrapper">
+                <input
+                  type="color"
+                  value={layer.borderColor || '#000000'}
+                  onChange={(e) => onUpdate({ borderColor: e.target.value })}
+                />
+                <span>Borde</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Grosor del Borde</label>
+            <div className="range-control-group">
+              <input
+                type="range"
+                min="0"
+                max="20"
+                value={layer.borderWidth || 0}
+                onChange={(e) => onUpdate({ borderWidth: Number(e.target.value) })}
+              />
+              <span>{layer.borderWidth}</span>
+            </div>
+          </div>
+
+          {/* Fondo opcional del texto */}
+          <div className="form-group">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={Boolean(layer.textBackgroundColor)}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    onUpdate({ textBackgroundColor: layer.textBackgroundColor || '#000000' });
+                  } else {
+                    const { textBackgroundColor: _, ...rest } = layer;
+                    onUpdate({ ...rest } as Partial<Layer>);
+                  }
+                }}
+              />
+              Fondo del texto
+            </label>
+            {layer.textBackgroundColor && (
+              <div className="color-input-wrapper">
+                <input
+                  type="color"
+                  value={layer.textBackgroundColor}
+                  onChange={(e) => onUpdate({ textBackgroundColor: e.target.value })}
+                />
+                <span>Color</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {layer.type === 'image' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+          <p>Tipo: Imagen</p>
+          <p>Dimensiones: {Math.round(layer.width)}x{Math.round(layer.height)} px</p>
+          <p>Rotación: {Math.round(layer.rotation)}°</p>
+          <div className="form-group" style={{ marginTop: '10px' }}>
+            <label>Cambiar Tamaño Ancho</label>
+            <input
+              type="number"
+              value={Math.round(layer.width)}
+              onChange={(e) => {
+                const w = Math.max(10, Number(e.target.value));
+                const aspect = layer.width / layer.height;
+                onUpdate({ width: w, height: w / aspect });
+              }}
+            />
+          </div>
+
+          {/* Ajustes de color (mini-photoshop) */}
+          <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', marginTop: '8px' }}>
+            <span style={{ display: 'block', fontWeight: 600, marginBottom: '8px', color: 'var(--primary-hover)', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.08em' }}>
+              Ajustes de color
+            </span>
+
+            {(
+              [
+                { key: 'brightness', label: 'Brillo', min: 0, max: 200, step: 1 },
+                { key: 'contrast', label: 'Contraste', min: 0, max: 200, step: 1 },
+                { key: 'saturation', label: 'Saturación', min: 0, max: 200, step: 1 },
+                { key: 'hue', label: 'Tono', min: -180, max: 180, step: 1 },
+                { key: 'blur', label: 'Desenfoque', min: 0, max: 20, step: 0.5 },
+              ] as const
+            ).map(({ key, label, min, max, step }) => {
+              const value = layer.adjustments?.[key] ?? (key === 'hue' ? 0 : 100);
+              return (
+                <div key={key} className="form-group" style={{ marginBottom: '8px' }}>
+                  <div className="range-control-group">
+                    <input
+                      type="range"
+                      min={min}
+                      max={max}
+                      step={step}
+                      value={value}
+                      onChange={(e) => {
+                        const next = { ...(layer.adjustments ?? defaultAdjustments()), [key]: Number(e.target.value) };
+                        onUpdate({ adjustments: next });
+                      }}
+                    />
+                    <span style={{ minWidth: 36, textAlign: 'right' }}>
+                      {value}{key === 'hue' ? '°' : key === 'blur' ? 'px' : '%'}
+                    </span>
+                  </div>
+                  <label style={{ fontSize: '11px', marginTop: '2px' }}>{label}</label>
+                </div>
+              );
+            })}
+
+            <button
+              className="btn btn-secondary"
+              style={{ width: '100%', padding: '6px', fontSize: '11px', marginTop: '4px' }}
+              onClick={() => onUpdate({ adjustments: defaultAdjustments() })}
+            >
+              Restablecer ajustes
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
