@@ -131,6 +131,9 @@ export default function App() {
   const [cropW, setCropW] = useState<number>(100);
   const [cropH, setCropH] = useState<number>(100);
   const [cropImgDims, setCropImgDims] = useState<{ width: number; height: number }>({ width: 100, height: 100 });
+  const [cropDragMode, setCropDragMode] = useState<'move' | 'resize' | null>(null);
+  const [cropDragStart, setCropDragStart] = useState<{ x: number; y: number; cropX: number; cropY: number; cropW: number; cropH: number }>({ x: 0, y: 0, cropX: 0, cropY: 0, cropW: 0, cropH: 0 });
+  const [cropDisplayDims, setCropDisplayDims] = useState<{ width: number; height: number }>({ width: 300, height: 200 });
 
   const saveHistory = (currentLayers: Layer[]) => {
     setHistory(prev => {
@@ -1161,11 +1164,36 @@ export default function App() {
     const img = new Image();
     img.src = selectedLayer.originalImageUrl || selectedLayer.imageUrl || '';
     img.onload = () => {
-      setCropImgDims({ width: img.width, height: img.height });
-      setCropX(0);
-      setCropY(0);
-      setCropW(img.width);
-      setCropH(img.height);
+      const origW = img.width;
+      const origH = img.height;
+      setCropImgDims({ width: origW, height: origH });
+      
+      const maxW = 400;
+      const maxH = 280;
+      let displayW = origW;
+      let displayH = origH;
+      const aspect = origW / origH;
+      
+      if (displayW > maxW) {
+        displayW = maxW;
+        displayH = maxW / aspect;
+      }
+      if (displayH > maxH) {
+        displayH = maxH;
+        displayW = maxH * aspect;
+      }
+      
+      setCropDisplayDims({ width: displayW, height: displayH });
+      
+      const w80 = Math.round(displayW * 0.8);
+      const h80 = Math.round(displayH * 0.8);
+      const xStart = Math.round((displayW - w80) / 2);
+      const yStart = Math.round((displayH - h80) / 2);
+
+      setCropX(xStart);
+      setCropY(yStart);
+      setCropW(w80);
+      setCropH(h80);
       setIsCropModalOpen(true);
     };
   };
@@ -1176,28 +1204,36 @@ export default function App() {
     const img = new Image();
     img.src = selectedLayer.originalImageUrl || selectedLayer.imageUrl || '';
     img.onload = () => {
+      const scaleX = img.width / cropDisplayDims.width;
+      const scaleY = img.height / cropDisplayDims.height;
+      
+      const origX = cropX * scaleX;
+      const origY = cropY * scaleY;
+      const origW = cropW * scaleX;
+      const origH = cropH * scaleY;
+
       const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = cropW;
-      tempCanvas.height = cropH;
+      tempCanvas.width = origW;
+      tempCanvas.height = origH;
       const tempCtx = tempCanvas.getContext('2d');
       if (!tempCtx) return;
       
       tempCtx.drawImage(
         img,
-        cropX,
-        cropY,
-        cropW,
-        cropH,
+        origX,
+        origY,
+        origW,
+        origH,
         0,
         0,
-        cropW,
-        cropH
+        origW,
+        origH
       );
       
       const croppedBase64 = tempCanvas.toDataURL('image/png');
       saveHistory(layers);
       
-      const newAspect = cropW / cropH;
+      const newAspect = origW / origH;
       const newHeight = selectedLayer.width / newAspect;
 
       setLayers(prev => prev.map(l => {
@@ -1216,57 +1252,65 @@ export default function App() {
     };
   };
 
-  // Dibujar previsualización del recorte en tiempo real en un canvas
-  useEffect(() => {
-    if (!isCropModalOpen || !selectedLayerId) return;
-    const selectedLayer = layers.find(l => l.id === selectedLayerId);
-    if (!selectedLayer || selectedLayer.type !== 'image') return;
+  const handleCropBoxMouseDown = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setCropDragMode('move');
+    setCropDragStart({
+      x: e.clientX,
+      y: e.clientY,
+      cropX,
+      cropY,
+      cropW,
+      cropH
+    });
+  };
 
-    const img = new Image();
-    img.src = selectedLayer.originalImageUrl || selectedLayer.imageUrl || '';
-    img.onload = () => {
-      const canvas = document.getElementById('crop-preview-canvas') as HTMLCanvasElement;
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+  const handleCropResizeMouseDown = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setCropDragMode('resize');
+    setCropDragStart({
+      x: e.clientX,
+      y: e.clientY,
+      cropX,
+      cropY,
+      cropW,
+      cropH
+    });
+  };
+
+  const handleCropMouseMove = (e: React.MouseEvent) => {
+    if (!cropDragMode) return;
+    e.preventDefault();
+    
+    const dx = e.clientX - cropDragStart.x;
+    const dy = e.clientY - cropDragStart.y;
+
+    if (cropDragMode === 'move') {
+      let newX = cropDragStart.cropX + dx;
+      let newY = cropDragStart.cropY + dy;
       
-      const maxW = 400;
-      const maxH = 280;
-      let w = img.width;
-      let h = img.height;
-      const aspect = w / h;
-      if (w > maxW) {
-        w = maxW;
-        h = maxW / aspect;
-      }
-      if (h > maxH) {
-        h = maxH;
-        w = maxH * aspect;
-      }
-      canvas.width = w;
-      canvas.height = h;
-
-      ctx.drawImage(img, 0, 0, w, h);
+      newX = Math.max(0, Math.min(newX, cropDisplayDims.width - cropW));
+      newY = Math.max(0, Math.min(newY, cropDisplayDims.height - cropH));
       
-      const scaleX = w / img.width;
-      const scaleY = h / img.height;
-      const cx = cropX * scaleX;
-      const cy = cropY * scaleY;
-      const cw = cropW * scaleX;
-      const ch = cropH * scaleY;
+      setCropX(newX);
+      setCropY(newY);
+    } else if (cropDragMode === 'resize') {
+      let newW = cropDragStart.cropW + dx;
+      let newH = cropDragStart.cropH + dy;
+      
+      newW = Math.max(30, Math.min(newW, cropDisplayDims.width - cropX));
+      newH = Math.max(30, Math.min(newH, cropDisplayDims.height - cropY));
+      
+      setCropW(newW);
+      setCropH(newH);
+    }
+  };
 
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
-      ctx.fillRect(0, 0, w, cy);
-      ctx.fillRect(0, cy + ch, w, h - (cy + ch));
-      ctx.fillRect(0, cy, cx, ch);
-      ctx.fillRect(cx + cw, cy, w - (cx + cw), ch);
-
-      ctx.strokeStyle = 'var(--primary)';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([6, 3]);
-      ctx.strokeRect(cx, cy, cw, ch);
-    };
-  }, [isCropModalOpen, selectedLayerId, cropX, cropY, cropW, cropH, layers]);
+  const handleCropMouseUp = () => {
+    setCropDragMode(null);
+  };
 
   return (
     <div className="app-container">
@@ -1817,21 +1861,21 @@ export default function App() {
                         className={`layer-styles-tab ${stylesActiveTab === 'fill' ? 'active' : ''}`}
                         onClick={() => setStylesActiveTab('fill')}
                       >
-                        🎨 Relleno
+                        Relleno
                       </button>
                       <button
                         type="button"
                         className={`layer-styles-tab ${stylesActiveTab === 'stroke' ? 'active' : ''}`}
                         onClick={() => setStylesActiveTab('stroke')}
                       >
-                        ✏️ Trazo
+                        Trazo
                       </button>
                       <button
                         type="button"
                         className={`layer-styles-tab ${stylesActiveTab === 'background' ? 'active' : ''}`}
                         onClick={() => setStylesActiveTab('background')}
                       >
-                        ⬜ Fondo
+                        Fondo
                       </button>
                     </>
                   ) : (
@@ -1841,20 +1885,80 @@ export default function App() {
                         className={`layer-styles-tab ${stylesActiveTab === 'adjustments' ? 'active' : ''}`}
                         onClick={() => setStylesActiveTab('adjustments')}
                       >
-                        🎛️ Ajustes
+                        Ajustes
                       </button>
                       <button
                         type="button"
                         className={`layer-styles-tab ${stylesActiveTab === 'presets' ? 'active' : ''}`}
                         onClick={() => setStylesActiveTab('presets')}
                       >
-                        🎬 Filtros
+                        Filtros
                       </button>
                     </>
                   )}
                 </div>
                 
                 <div className="layer-styles-content">
+                  {/* Previsualización en tiempo real integrada en el modal */}
+                  <div style={{ marginBottom: '15px' }}>
+                    <span style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>
+                      Previsualización en tiempo real
+                    </span>
+                    {selectedLayer.type === 'text' ? (
+                      <div className="layer-styles-preview-box" style={{
+                        background: 'var(--bg-panel)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '8px',
+                        height: '110px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        overflow: 'hidden',
+                        padding: '10px'
+                      }}>
+                        <span style={{
+                          color: selectedLayer.color || '#ffffff',
+                          fontFamily: selectedLayer.fontFamily || 'Impact',
+                          fontSize: '32px',
+                          fontWeight: 'bold',
+                          textAlign: 'center',
+                          WebkitTextStroke: selectedLayer.borderWidth ? `${selectedLayer.borderWidth}px ${selectedLayer.borderColor}` : undefined,
+                          backgroundColor: selectedLayer.textBackgroundColor || 'transparent',
+                          padding: '8px 16px',
+                          borderRadius: '4px',
+                          wordBreak: 'break-all',
+                          whiteSpace: 'pre-wrap',
+                          lineHeight: 1.1
+                        }}>
+                          {selectedLayer.text || 'Texto de Muestra'}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="layer-styles-preview-box" style={{
+                        background: 'var(--bg-panel)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '8px',
+                        height: '110px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        overflow: 'hidden',
+                        padding: '10px'
+                      }}>
+                        <img
+                          src={selectedLayer.imageUrl}
+                          alt="Preview"
+                          style={{
+                            maxHeight: '100%',
+                            maxWidth: '100%',
+                            objectFit: 'contain',
+                            filter: adjustmentsToFilter(selectedLayer.adjustments)
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+
                   {/* Controles de Texto - Relleno */}
                   {selectedLayer.type === 'text' && stylesActiveTab === 'fill' && (
                     <div className="form-group">
@@ -2032,7 +2136,7 @@ export default function App() {
               </div>
               
               <div className="layer-styles-footer">
-                <button type="button" className="btn btn-accent" onClick={() => setIsStylesModalOpen(false)}>Aceptar (FX)</button>
+                <button type="button" className="btn btn-accent" onClick={() => setIsStylesModalOpen(false)}>Aceptar</button>
               </div>
             </div>
           </div>
@@ -2042,97 +2146,115 @@ export default function App() {
       {/* ============================================================ */}
       {/* Modal de Recorte de Imagen (Crop Modal) */}
       {/* ============================================================ */}
-      {isCropModalOpen && selectedLayerId && (
-        <div className="modal-overlay animate-fade-in" onClick={() => setIsCropModalOpen(false)}>
-          <div className="layer-styles-modal" style={{ maxWidth: '500px', height: 'auto' }} onClick={(e) => e.stopPropagation()}>
-            <div className="layer-styles-header">
-              <h3>Recortar Imagen</h3>
-              <button className="icon-btn" onClick={() => setIsCropModalOpen(false)}>×</button>
-            </div>
-            
-            <div className="layer-styles-content" style={{ gap: '15px' }}>
-              <div style={{ display: 'flex', justifyContent: 'center', background: '#000', padding: '10px', borderRadius: '8px' }}>
-                <canvas id="crop-preview-canvas" style={{ maxWidth: '100%', height: 'auto', display: 'block' }} />
+      {isCropModalOpen && selectedLayerId && (() => {
+        const selectedLayer = layers.find(l => l.id === selectedLayerId);
+        if (!selectedLayer) return null;
+        return (
+          <div className="modal-overlay animate-fade-in" onClick={() => setIsCropModalOpen(false)}>
+            <div className="layer-styles-modal" style={{ maxWidth: '500px', height: 'auto' }} onClick={(e) => e.stopPropagation()}>
+              <div className="layer-styles-header">
+                <h3>Recortar Imagen</h3>
+                <button className="icon-btn" onClick={() => setIsCropModalOpen(false)}>×</button>
               </div>
               
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div className="form-group">
-                  <label>Margen Izquierdo (X)</label>
-                  <div className="range-control-group">
-                    <input
-                      type="range"
-                      min="0"
-                      max={cropImgDims.width - 20}
-                      value={cropX}
-                      onChange={(e) => {
-                        const val = Number(e.target.value);
-                        setCropX(val);
-                        if (val + cropW > cropImgDims.width) {
-                          setCropW(cropImgDims.width - val);
-                        }
+              <div className="layer-styles-content" style={{ gap: '15px', alignItems: 'center' }}>
+                <div 
+                  className="crop-container"
+                  style={{
+                    position: 'relative',
+                    width: `${cropDisplayDims.width}px`,
+                    height: `${cropDisplayDims.height}px`,
+                    background: '#000',
+                    userSelect: 'none',
+                    overflow: 'hidden',
+                    borderRadius: '6px',
+                    border: '1px solid var(--border-color)'
+                  }}
+                  onMouseMove={handleCropMouseMove}
+                  onMouseUp={handleCropMouseUp}
+                  onMouseLeave={handleCropMouseUp}
+                >
+                  {/* Imagen base opacada */}
+                  <img
+                    src={selectedLayer.originalImageUrl || selectedLayer.imageUrl}
+                    alt="Recortar"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      pointerEvents: 'none',
+                      userSelect: 'none',
+                      opacity: 0.35
+                    }}
+                  />
+
+                  {/* Caja de selección de recorte */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: `${cropX}px`,
+                      top: `${cropY}px`,
+                      width: `${cropW}px`,
+                      height: `${cropH}px`,
+                      border: '2px dashed var(--primary)',
+                      boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.55)',
+                      cursor: 'move',
+                      boxSizing: 'border-box'
+                    }}
+                    onMouseDown={handleCropBoxMouseDown}
+                  >
+                    {/* Imagen recortada brillante de preview */}
+                    <div style={{
+                      width: '100%',
+                      height: '100%',
+                      overflow: 'hidden',
+                      position: 'relative'
+                    }}>
+                      <img
+                        src={selectedLayer.originalImageUrl || selectedLayer.imageUrl}
+                        alt="Crop preview"
+                        style={{
+                          position: 'absolute',
+                          left: `-${cropX}px`,
+                          top: `-${cropY}px`,
+                          width: `${cropDisplayDims.width}px`,
+                          height: `${cropDisplayDims.height}px`,
+                          pointerEvents: 'none',
+                          maxWidth: 'none'
+                        }}
+                      />
+                    </div>
+
+                    {/* Tirador de cambio de tamaño en la esquina inferior derecha */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        right: '-5px',
+                        bottom: '-5px',
+                        width: '10px',
+                        height: '10px',
+                        background: 'var(--primary)',
+                        border: '2px solid #fff',
+                        borderRadius: '50%',
+                        cursor: 'se-resize',
+                        zIndex: 10
                       }}
+                      onMouseDown={handleCropResizeMouseDown}
                     />
-                    <span>{cropX}px</span>
                   </div>
                 </div>
-
-                <div className="form-group">
-                  <label>Margen Superior (Y)</label>
-                  <div className="range-control-group">
-                    <input
-                      type="range"
-                      min="0"
-                      max={cropImgDims.height - 20}
-                      value={cropY}
-                      onChange={(e) => {
-                        const val = Number(e.target.value);
-                        setCropY(val);
-                        if (val + cropH > cropImgDims.height) {
-                          setCropH(cropImgDims.height - val);
-                        }
-                      }}
-                    />
-                    <span>{cropY}px</span>
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label>Ancho del Recorte</label>
-                  <div className="range-control-group">
-                    <input
-                      type="range"
-                      min="20"
-                      max={cropImgDims.width - cropX}
-                      value={cropW}
-                      onChange={(e) => setCropW(Number(e.target.value))}
-                    />
-                    <span>{cropW}px</span>
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label>Alto del Recorte</label>
-                  <div className="range-control-group">
-                    <input
-                      type="range"
-                      min="20"
-                      max={cropImgDims.height - cropY}
-                      value={cropH}
-                      onChange={(e) => setCropH(Number(e.target.value))}
-                    />
-                    <span>{cropH}px</span>
-                  </div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '5px' }}>
+                  Arrastra la caja para moverla, usa el tirador de la esquina inferior derecha para cambiar el tamaño
                 </div>
               </div>
-            </div>
 
-            <div className="layer-styles-footer">
-              <button type="button" className="btn btn-secondary" onClick={() => setIsCropModalOpen(false)}>Cancelar</button>
-              <button type="button" className="btn btn-accent" onClick={handleApplyCrop}>Aplicar Recorte</button>
+              <div className="layer-styles-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setIsCropModalOpen(false)}>Cancelar</button>
+                <button type="button" className="btn btn-accent" onClick={handleApplyCrop}>Aplicar Recorte</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
@@ -2275,7 +2397,7 @@ function LayerPropertiesPanel({ layer, onUpdate, onOpenStyles, onOpenCrop }: Lay
               style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
               onClick={onOpenStyles}
             >
-              🎨 Estilos de Capa (Colores, Bordes...)
+              Estilos de Capa (Colores, Bordes...)
             </button>
           </div>
         </div>
@@ -2307,7 +2429,7 @@ function LayerPropertiesPanel({ layer, onUpdate, onOpenStyles, onOpenCrop }: Lay
               style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
               onClick={onOpenStyles}
             >
-              🎨 Ajustes de Color de la Imagen
+              Ajustes de Color de la Imagen
             </button>
             
             <button
@@ -2316,7 +2438,7 @@ function LayerPropertiesPanel({ layer, onUpdate, onOpenStyles, onOpenCrop }: Lay
               style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
               onClick={onOpenCrop}
             >
-              ✂️ Recortar Imagen
+              Recortar Imagen
             </button>
           </div>
         </div>
