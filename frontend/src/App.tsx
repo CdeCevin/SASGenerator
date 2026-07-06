@@ -156,19 +156,15 @@ export default function App() {
 
   // --- Estados de Modales Auxiliares (Photoshop Layer Styles & Crop) ---
   const [isStylesModalOpen, setIsStylesModalOpen] = useState<boolean>(false);
-  const [isCropModalOpen, setIsCropModalOpen] = useState<boolean>(false);
   const [stylesActiveTab, setStylesActiveTab] = useState<'fill' | 'stroke' | 'background' | 'adjustments' | 'curves' | 'presets'>('fill');
   const [backupLayer, setBackupLayer] = useState<Layer | null>(null);
-
-  // Estados del Crop (Recorte)
-  const [cropX, setCropX] = useState<number>(0);
-  const [cropY, setCropY] = useState<number>(0);
-  const [cropW, setCropW] = useState<number>(100);
-  const [cropH, setCropH] = useState<number>(100);
-  const [cropImgDims, setCropImgDims] = useState<{ width: number; height: number }>({ width: 100, height: 100 });
-  const [cropDragMode, setCropDragMode] = useState<'move' | 'resize' | null>(null);
-  const [cropDragStart, setCropDragStart] = useState<{ x: number; y: number; cropX: number; cropY: number; cropW: number; cropH: number }>({ x: 0, y: 0, cropX: 0, cropY: 0, cropW: 0, cropH: 0 });
-  const [cropDisplayDims, setCropDisplayDims] = useState<{ width: number; height: number }>({ width: 300, height: 200 });
+  const [cropState, setCropState] = useState<{
+    layerId: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  } | null>(null);
 
   const saveHistory = (currentLayers: Layer[]) => {
     setHistory(prev => {
@@ -200,18 +196,32 @@ export default function App() {
   const layerFileInputRef = useRef<HTMLInputElement>(null);
 
   // Lógica de arrastre de capas
-  const [activeAction, setActiveAction] = useState<{
-    type: 'drag' | 'resize' | 'rotate';
-    handle?: 'tl' | 'tr' | 'bl' | 'br' | 't' | 'b' | 'l' | 'r';
-    layerId: string;
-    startX: number;
-    startY: number;
-    startLayerX: number;
-    startLayerY: number;
-    startLayerW: number;
-    startLayerH: number;
-    startLayerRot: number;
-  } | null>(null);
+  const [activeAction, setActiveAction] = useState<
+    | {
+        type: 'drag' | 'resize' | 'rotate';
+        handle?: 'tl' | 'tr' | 'bl' | 'br' | 't' | 'b' | 'l' | 'r';
+        layerId: string;
+        startX: number;
+        startY: number;
+        startLayerX: number;
+        startLayerY: number;
+        startLayerW: number;
+        startLayerH: number;
+        startLayerRot: number;
+      }
+    | {
+        type: 'crop';
+        handle: 'tl' | 'tr' | 'bl' | 'br' | 't' | 'b' | 'l' | 'r';
+        layerId: string;
+        startX: number;
+        startY: number;
+        startCropX: number;
+        startCropY: number;
+        startCropW: number;
+        startCropH: number;
+      }
+    | null
+  >(null);
 
 
   // Atajos de teclado: Delete/Backspace para eliminar capa, Ctrl+Z para deshacer
@@ -891,6 +901,68 @@ export default function App() {
           return l;
         }));
       } 
+      else if (activeAction.type === 'crop') {
+        const dx = (e.clientX - activeAction.startX) / canvasScale;
+        const dy = (e.clientY - activeAction.startY) / canvasScale;
+
+        // Rotar el desplazamiento delta de vuelta al sistema de coordenadas de la capa
+        const rad = (layer.rotation * Math.PI) / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+        
+        // Coordenadas locales de desplazamiento dx, dy
+        const localDx = dx * cos + dy * sin;
+        const localDy = -dx * sin + dy * cos;
+
+        let newX = activeAction.startCropX ?? 0;
+        let newY = activeAction.startCropY ?? 0;
+        let newW = activeAction.startCropW ?? layer.width;
+        let newH = activeAction.startCropH ?? layer.height;
+
+        const handle = activeAction.handle;
+        if (handle === 'tl') {
+          newX = Math.max(0, Math.min((activeAction.startCropX ?? 0) + localDx, (activeAction.startCropX ?? 0) + (activeAction.startCropW ?? layer.width) - 20));
+          newW = (activeAction.startCropW ?? layer.width) - (newX - (activeAction.startCropX ?? 0));
+          newY = Math.max(0, Math.min((activeAction.startCropY ?? 0) + localDy, (activeAction.startCropY ?? 0) + (activeAction.startCropH ?? layer.height) - 20));
+          newH = (activeAction.startCropH ?? layer.height) - (newY - (activeAction.startCropY ?? 0));
+        }
+        else if (handle === 'tr') {
+          newW = Math.max(20, Math.min((activeAction.startCropW ?? layer.width) + localDx, layer.width - (activeAction.startCropX ?? 0)));
+          newY = Math.max(0, Math.min((activeAction.startCropY ?? 0) + localDy, (activeAction.startCropY ?? 0) + (activeAction.startCropH ?? layer.height) - 20));
+          newH = (activeAction.startCropH ?? layer.height) - (newY - (activeAction.startCropY ?? 0));
+        }
+        else if (handle === 'bl') {
+          newX = Math.max(0, Math.min((activeAction.startCropX ?? 0) + localDx, (activeAction.startCropX ?? 0) + (activeAction.startCropW ?? layer.width) - 20));
+          newW = (activeAction.startCropW ?? layer.width) - (newX - (activeAction.startCropX ?? 0));
+          newH = Math.max(20, Math.min((activeAction.startCropH ?? layer.height) + localDy, layer.height - (activeAction.startCropY ?? 0)));
+        }
+        else if (handle === 'br') {
+          newW = Math.max(20, Math.min((activeAction.startCropW ?? layer.width) + localDx, layer.width - (activeAction.startCropX ?? 0)));
+          newH = Math.max(20, Math.min((activeAction.startCropH ?? layer.height) + localDy, layer.height - (activeAction.startCropY ?? 0)));
+        }
+        else if (handle === 't') {
+          newY = Math.max(0, Math.min((activeAction.startCropY ?? 0) + localDy, (activeAction.startCropY ?? 0) + (activeAction.startCropH ?? layer.height) - 20));
+          newH = (activeAction.startCropH ?? layer.height) - (newY - (activeAction.startCropY ?? 0));
+        }
+        else if (handle === 'b') {
+          newH = Math.max(20, Math.min((activeAction.startCropH ?? layer.height) + localDy, layer.height - (activeAction.startCropY ?? 0)));
+        }
+        else if (handle === 'l') {
+          newX = Math.max(0, Math.min((activeAction.startCropX ?? 0) + localDx, (activeAction.startCropX ?? 0) + (activeAction.startCropW ?? layer.width) - 20));
+          newW = (activeAction.startCropW ?? layer.width) - (newX - (activeAction.startCropX ?? 0));
+        }
+        else if (handle === 'r') {
+          newW = Math.max(20, Math.min((activeAction.startCropW ?? layer.width) + localDx, layer.width - (activeAction.startCropX ?? 0)));
+        }
+
+        setCropState(prev => prev ? {
+          ...prev,
+          x: Math.round(newX),
+          y: Math.round(newY),
+          w: Math.round(newW),
+          h: Math.round(newH)
+        } : null);
+      }
       else if (activeAction.type === 'rotate') {
         // Centro del lienzo
         const cx = layer.x + layer.width / 2;
@@ -1301,59 +1373,38 @@ export default function App() {
     setSelectedPointIndex(null);
   };
 
-  const handleOpenCropModal = () => {
+  const handleOpenCrop = () => {
     const selectedLayer = layers.find(l => l.id === selectedLayerId);
     if (!selectedLayer || selectedLayer.type !== 'image') return;
-    const img = new Image();
-    img.src = selectedLayer.originalImageUrl || selectedLayer.imageUrl || '';
-    img.onload = () => {
-      const origW = img.width;
-      const origH = img.height;
-      setCropImgDims({ width: origW, height: origH });
-      
-      const maxW = 400;
-      const maxH = 280;
-      let displayW = origW;
-      let displayH = origH;
-      const aspect = origW / origH;
-      
-      if (displayW > maxW) {
-        displayW = maxW;
-        displayH = maxW / aspect;
-      }
-      if (displayH > maxH) {
-        displayH = maxH;
-        displayW = maxH * aspect;
-      }
-      
-      setCropDisplayDims({ width: displayW, height: displayH });
-      
-      const w80 = Math.round(displayW * 0.8);
-      const h80 = Math.round(displayH * 0.8);
-      const xStart = Math.round((displayW - w80) / 2);
-      const yStart = Math.round((displayH - h80) / 2);
+    setCropState({
+      layerId: selectedLayer.id,
+      x: 0,
+      y: 0,
+      w: selectedLayer.width,
+      h: selectedLayer.height,
+    });
+  };
 
-      setCropX(xStart);
-      setCropY(yStart);
-      setCropW(w80);
-      setCropH(h80);
-      setIsCropModalOpen(true);
-    };
+  const handleCancelCrop = () => {
+    setCropState(null);
   };
 
   const handleApplyCrop = () => {
-    const selectedLayer = layers.find(l => l.id === selectedLayerId);
+    if (!cropState) return;
+    const selectedLayer = layers.find(l => l.id === cropState.layerId);
     if (!selectedLayer || selectedLayer.type !== 'image') return;
+
     const img = new Image();
     img.src = selectedLayer.originalImageUrl || selectedLayer.imageUrl || '';
     img.onload = () => {
-      const scaleX = img.width / cropDisplayDims.width;
-      const scaleY = img.height / cropDisplayDims.height;
+      // Coordenadas originales de la imagen (de escala real)
+      const scaleX = img.width / selectedLayer.width;
+      const scaleY = img.height / selectedLayer.height;
       
-      const origX = cropX * scaleX;
-      const origY = cropY * scaleY;
-      const origW = cropW * scaleX;
-      const origH = cropH * scaleY;
+      const origX = cropState.x * scaleX;
+      const origY = cropState.y * scaleY;
+      const origW = cropState.w * scaleX;
+      const origH = cropState.h * scaleY;
 
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = origW;
@@ -1375,9 +1426,23 @@ export default function App() {
       
       const croppedBase64 = tempCanvas.toDataURL('image/png');
       saveHistory(layers);
+
+      // Calcular nueva posición top-left del lienzo para que la imagen recortada
+      // quede en el mismo lugar que antes (sin saltos bruscos)
+      const rad = (selectedLayer.rotation * Math.PI) / 180;
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
       
-      const newAspect = origW / origH;
-      const newHeight = selectedLayer.width / newAspect;
+      // Desplazamiento local
+      const dxLocal = cropState.x;
+      const dyLocal = cropState.y;
+      
+      // Desplazamiento global/mundo
+      const dxWorld = dxLocal * cos - dyLocal * sin;
+      const dyWorld = dxLocal * sin + dyLocal * cos;
+
+      const newX = selectedLayer.x + dxWorld;
+      const newY = selectedLayer.y + dyWorld;
 
       setLayers(prev => prev.map(l => {
         if (l.id === selectedLayer.id) {
@@ -1385,74 +1450,34 @@ export default function App() {
             ...l,
             imageUrl: croppedBase64,
             originalImageUrl: l.originalImageUrl || l.imageUrl,
-            height: newHeight,
+            x: newX,
+            y: newY,
+            width: cropState.w,
+            height: cropState.h
           };
         }
         return l;
       }));
 
-      setIsCropModalOpen(false);
+      setCropState(null);
     };
   };
 
-  const handleCropBoxMouseDown = (e: React.MouseEvent) => {
+  const handleCropHandleMouseDown = (e: React.MouseEvent, handle: 'tl' | 'tr' | 'bl' | 'br' | 't' | 'b' | 'l' | 'r') => {
+    e.preventDefault();
     e.stopPropagation();
-    e.preventDefault();
-    setCropDragMode('move');
-    setCropDragStart({
-      x: e.clientX,
-      y: e.clientY,
-      cropX,
-      cropY,
-      cropW,
-      cropH
+    if (!cropState) return;
+    setActiveAction({
+      type: 'crop',
+      handle,
+      layerId: cropState.layerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      startCropX: cropState.x,
+      startCropY: cropState.y,
+      startCropW: cropState.w,
+      startCropH: cropState.h,
     });
-  };
-
-  const handleCropResizeMouseDown = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    setCropDragMode('resize');
-    setCropDragStart({
-      x: e.clientX,
-      y: e.clientY,
-      cropX,
-      cropY,
-      cropW,
-      cropH
-    });
-  };
-
-  const handleCropMouseMove = (e: React.MouseEvent) => {
-    if (!cropDragMode) return;
-    e.preventDefault();
-    
-    const dx = e.clientX - cropDragStart.x;
-    const dy = e.clientY - cropDragStart.y;
-
-    if (cropDragMode === 'move') {
-      let newX = cropDragStart.cropX + dx;
-      let newY = cropDragStart.cropY + dy;
-      
-      newX = Math.max(0, Math.min(newX, cropDisplayDims.width - cropW));
-      newY = Math.max(0, Math.min(newY, cropDisplayDims.height - cropH));
-      
-      setCropX(newX);
-      setCropY(newY);
-    } else if (cropDragMode === 'resize') {
-      let newW = cropDragStart.cropW + dx;
-      let newH = cropDragStart.cropH + dy;
-      
-      newW = Math.max(30, Math.min(newW, cropDisplayDims.width - cropX));
-      newH = Math.max(30, Math.min(newH, cropDisplayDims.height - cropY));
-      
-      setCropW(newW);
-      setCropH(newH);
-    }
-  };
-
-  const handleCropMouseUp = () => {
-    setCropDragMode(null);
   };
 
 
@@ -1686,19 +1711,101 @@ export default function App() {
                           }}
                           onMouseDown={(e) => handleLayerMouseDown(e, layer.id)}
                         >
-                          {layer.type === 'image' && layer.imageUrl && (
-                            <img
-                              src={layer.imageUrl}
-                              alt={layer.name}
-                              style={{
-                                width: '100%',
-                                height: '100%',
-                                objectFit: 'fill',
-                                pointerEvents: 'none',
-                                filter: `${layer.curvesPoints && layer.curvesPoints.length > 0 ? `url(#curves-${layer.id}) ` : ''}${adjustmentsToFilter(layer.adjustments)}`,
-                              }}
-                            />
-                          )}
+                          {layer.type === 'image' && layer.imageUrl && (() => {
+                            const isLayerCropping = cropState && cropState.layerId === layer.id;
+                            if (isLayerCropping) {
+                              const cs = cropState!;
+                              return (
+                                <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+                                  {/* Imagen base opacada */}
+                                  <img
+                                    src={layer.imageUrl}
+                                    alt={layer.name}
+                                    style={{
+                                      width: '100%',
+                                      height: '100%',
+                                      objectFit: 'fill',
+                                      pointerEvents: 'none',
+                                      opacity: 0.35,
+                                      filter: `${layer.curvesPoints && layer.curvesPoints.length > 0 ? `url(#curves-${layer.id}) ` : ''}${adjustmentsToFilter(layer.adjustments)}`,
+                                    }}
+                                  />
+                                  
+                                  {/* Caja de recorte activa y brillante */}
+                                  <div
+                                    style={{
+                                      position: 'absolute',
+                                      left: `${cs.x}px`,
+                                      top: `${cs.y}px`,
+                                      width: `${cs.w}px`,
+                                      height: `${cs.h}px`,
+                                      overflow: 'hidden',
+                                      outline: '1.5px dashed var(--primary)',
+                                    }}
+                                  >
+                                    <img
+                                      src={layer.imageUrl}
+                                      alt={`${layer.name} cropped`}
+                                      style={{
+                                        position: 'absolute',
+                                        left: `-${cs.x}px`,
+                                        top: `-${cs.y}px`,
+                                        width: `${layer.width}px`,
+                                        height: `${layer.height}px`,
+                                        objectFit: 'fill',
+                                        pointerEvents: 'none',
+                                        filter: `${layer.curvesPoints && layer.curvesPoints.length > 0 ? `url(#curves-${layer.id}) ` : ''}${adjustmentsToFilter(layer.adjustments)}`,
+                                      }}
+                                    />
+                                  </div>
+
+                                  {/* Tiradores del Recorte */}
+                                  {(['tl', 'tr', 'bl', 'br', 't', 'b', 'l', 'r'] as const).map(handle => {
+                                    let style: React.CSSProperties = {
+                                      position: 'absolute',
+                                      width: '8px',
+                                      height: '8px',
+                                      background: '#ffffff',
+                                      border: '1.5px solid var(--primary)',
+                                      zIndex: 1000,
+                                      transform: 'translate(-50%, -50%)',
+                                    };
+
+                                    if (handle === 'tl') { style.left = `${cs.x}px`; style.top = `${cs.y}px`; style.cursor = 'nwse-resize'; }
+                                    else if (handle === 'tr') { style.left = `${cs.x + cs.w}px`; style.top = `${cs.y}px`; style.cursor = 'nesw-resize'; }
+                                    else if (handle === 'bl') { style.left = `${cs.x}px`; style.top = `${cs.y + cs.h}px`; style.cursor = 'nesw-resize'; }
+                                    else if (handle === 'br') { style.left = `${cs.x + cs.w}px`; style.top = `${cs.y + cs.h}px`; style.cursor = 'nwse-resize'; }
+                                    else if (handle === 't') { style.left = `${cs.x + cs.w / 2}px`; style.top = `${cs.y}px`; style.cursor = 'ns-resize'; }
+                                    else if (handle === 'b') { style.left = `${cs.x + cs.w / 2}px`; style.top = `${cs.y + cs.h}px`; style.cursor = 'ns-resize'; }
+                                    else if (handle === 'l') { style.left = `${cs.x}px`; style.top = `${cs.y + cs.h / 2}px`; style.cursor = 'ew-resize'; }
+                                    else if (handle === 'r') { style.left = `${cs.x + cs.w}px`; style.top = `${cs.y + cs.h / 2}px`; style.cursor = 'ew-resize'; }
+
+                                    return (
+                                      <div
+                                        key={handle}
+                                        style={style}
+                                        onMouseDown={(e) => handleCropHandleMouseDown(e, handle)}
+                                      />
+                                    );
+                                  })}
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <img
+                                src={layer.imageUrl}
+                                alt={layer.name}
+                                style={{
+                                  width: '100%',
+                                  height: '100%',
+                                  objectFit: 'fill',
+                                  pointerEvents: 'none',
+                                  filter: `${layer.curvesPoints && layer.curvesPoints.length > 0 ? `url(#curves-${layer.id}) ` : ''}${adjustmentsToFilter(layer.adjustments)}`,
+                                }}
+                              />
+                            );
+                          })()}
 
                           {layer.type === 'text' && (
                             <div
@@ -1919,7 +2026,10 @@ export default function App() {
                       }
                       setIsStylesModalOpen(true);
                     }}
-                    onOpenCrop={handleOpenCropModal}
+                    onOpenCrop={handleOpenCrop}
+                    cropActive={Boolean(cropState && cropState.layerId === selectedLayer.id)}
+                    onCancelCrop={handleCancelCrop}
+                    onApplyCrop={handleApplyCrop}
                   />
                 </div>
               ) : (
@@ -2398,118 +2508,7 @@ export default function App() {
         );
       })()}
 
-      {/* ============================================================ */}
-      {/* Modal de Recorte de Imagen (Crop Modal) */}
-      {/* ============================================================ */}
-      {isCropModalOpen && selectedLayerId && (() => {
-        const selectedLayer = layers.find(l => l.id === selectedLayerId);
-        if (!selectedLayer) return null;
-        return (
-          <div className="modal-overlay animate-fade-in" onClick={() => setIsCropModalOpen(false)}>
-            <div className="layer-styles-modal" style={{ maxWidth: '500px', height: 'auto' }} onClick={(e) => e.stopPropagation()}>
-              <div className="layer-styles-header">
-                <h3>Recortar Imagen</h3>
-                <button className="icon-btn" onClick={() => setIsCropModalOpen(false)}>×</button>
-              </div>
-              
-              <div className="layer-styles-content" style={{ gap: '15px', alignItems: 'center' }}>
-                <div 
-                  className="crop-container"
-                  style={{
-                    position: 'relative',
-                    width: `${cropDisplayDims.width}px`,
-                    height: `${cropDisplayDims.height}px`,
-                    background: '#000',
-                    userSelect: 'none',
-                    overflow: 'hidden',
-                    borderRadius: '6px',
-                    border: '1px solid var(--border-color)'
-                  }}
-                  onMouseMove={handleCropMouseMove}
-                  onMouseUp={handleCropMouseUp}
-                  onMouseLeave={handleCropMouseUp}
-                >
-                  {/* Imagen base opacada */}
-                  <img
-                    src={selectedLayer.originalImageUrl || selectedLayer.imageUrl}
-                    alt="Recortar"
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      pointerEvents: 'none',
-                      userSelect: 'none',
-                      opacity: 0.35
-                    }}
-                  />
 
-                  {/* Caja de selección de recorte */}
-                  <div
-                    style={{
-                      position: 'absolute',
-                      left: `${cropX}px`,
-                      top: `${cropY}px`,
-                      width: `${cropW}px`,
-                      height: `${cropH}px`,
-                      border: '2px dashed var(--primary)',
-                      boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.55)',
-                      cursor: 'move',
-                      boxSizing: 'border-box'
-                    }}
-                    onMouseDown={handleCropBoxMouseDown}
-                  >
-                    {/* Imagen recortada brillante de preview */}
-                    <div style={{
-                      width: '100%',
-                      height: '100%',
-                      overflow: 'hidden',
-                      position: 'relative'
-                    }}>
-                      <img
-                        src={selectedLayer.originalImageUrl || selectedLayer.imageUrl}
-                        alt="Crop preview"
-                        style={{
-                          position: 'absolute',
-                          left: `-${cropX}px`,
-                          top: `-${cropY}px`,
-                          width: `${cropDisplayDims.width}px`,
-                          height: `${cropDisplayDims.height}px`,
-                          pointerEvents: 'none',
-                          maxWidth: 'none'
-                        }}
-                      />
-                    </div>
-
-                    {/* Tirador de cambio de tamaño en la esquina inferior derecha */}
-                    <div
-                      style={{
-                        position: 'absolute',
-                        right: '-5px',
-                        bottom: '-5px',
-                        width: '10px',
-                        height: '10px',
-                        background: 'var(--primary)',
-                        border: '2px solid #fff',
-                        borderRadius: '50%',
-                        cursor: 'se-resize',
-                        zIndex: 10
-                      }}
-                      onMouseDown={handleCropResizeMouseDown}
-                    />
-                  </div>
-                </div>
-                <div style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '5px' }}>
-                  Arrastra la caja para moverla, usa el tirador de la esquina inferior derecha para cambiar el tamaño
-                </div>
-              </div>
-
-              <div className="layer-styles-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setIsCropModalOpen(false)}>Cancelar</button>
-                <button type="button" className="btn btn-accent" onClick={handleApplyCrop}>Aplicar Recorte</button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 }
@@ -2598,9 +2597,12 @@ interface LayerPropertiesPanelProps {
   onUpdate: (updates: Partial<Layer>) => void;
   onOpenStyles: () => void;
   onOpenCrop: () => void;
+  cropActive: boolean;
+  onCancelCrop: () => void;
+  onApplyCrop: () => void;
 }
 
-function LayerPropertiesPanel({ layer, onUpdate, onOpenStyles, onOpenCrop }: LayerPropertiesPanelProps) {
+function LayerPropertiesPanel({ layer, onUpdate, onOpenStyles, onOpenCrop, cropActive, onCancelCrop, onApplyCrop }: LayerPropertiesPanelProps) {
   return (
     <div className="layer-properties animate-fade-in">
       {layer.type === 'text' && (
@@ -2683,18 +2685,40 @@ function LayerPropertiesPanel({ layer, onUpdate, onOpenStyles, onOpenCrop }: Lay
               className="btn btn-secondary"
               style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
               onClick={onOpenStyles}
+              disabled={cropActive}
             >
               Ajustes de Color de la Imagen
             </button>
             
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-              onClick={onOpenCrop}
-            >
-              Recortar Imagen
-            </button>
+            {cropActive ? (
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ flex: 1, padding: '8px' }}
+                  onClick={onCancelCrop}
+                >
+                  Cancelar Recorte
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-accent"
+                  style={{ flex: 1, padding: '8px' }}
+                  onClick={onApplyCrop}
+                >
+                  Aplicar Recorte
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                onClick={onOpenCrop}
+              >
+                Recortar Imagen
+              </button>
+            )}
           </div>
         </div>
       )}
