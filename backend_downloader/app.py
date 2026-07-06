@@ -131,32 +131,29 @@ def diagnose(url: str = Query(...)):
 @app.get("/fetch-formats")
 def fetch_formats(url: str = Query(..., description="URL del video de YouTube u otro portal")):
     """Obtiene los formatos y resoluciones de video disponibles."""
-    ydl_opts = {
-        'quiet': True,
-        'no_warnings': True,
-        'nocheckcertificate': True,
-        'impersonate': ImpersonateTarget.from_str('chrome')
-    }
-    if os.path.exists(COOKIES_PATH):
-        ydl_opts['cookiefile'] = COOKIES_PATH
+    # Misma lógica que /download: nunca usar cliente web sin cookies
+    strategies = [
+        {'quiet': True, 'no_warnings': True, 'nocheckcertificate': True,
+         'extractor_args': {'youtube': {'player_client': ['android_vr', 'tv_embedded']}}},
+        {'quiet': True, 'no_warnings': True, 'nocheckcertificate': True,
+         'extractor_args': {'youtube': {'player_client': ['android', 'ios']}}},
+        {'quiet': True, 'no_warnings': True, 'nocheckcertificate': True,
+         'extractor_args': {'youtube': {'player_client': ['tv', 'android_vr']}}},
+    ]
 
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-    except Exception as e:
-        print(f"[SASDownloader] Fallo en fetch principal, reintentando: {str(e)}")
-        ydl_opts = {
-            'quiet': True,
-            'no_warnings': True,
-            'nocheckcertificate': True,
-            'impersonate': ImpersonateTarget.from_str('chrome'),
-            'extractor_args': {'youtube': {'player_client': ['tv', 'android', 'ios', '-web', '-mweb', '-web_safari']}}
-        }
+    info = None
+    last_error = None
+    for attempt, opts in enumerate(strategies, start=1):
         try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
-        except Exception as fallback_error:
-            raise HTTPException(status_code=400, detail=f"Error al obtener formatos del video: {str(fallback_error)}")
+            break
+        except Exception as e:
+            last_error = e
+            print(f"[SASDownloader] fetch-formats intento {attempt} fallido: {e}")
+
+    if info is None:
+        raise HTTPException(status_code=400, detail=f"Error al obtener formatos del video: {str(last_error)}")
 
     try:
         resolutions = set()
@@ -207,28 +204,33 @@ def download_video(
         merge_fmt = None
         final_extension = '.mp3'
 
-    def build_opts(with_cookies, restricted_clients):
-        opts = {
-            'outtmpl': output_template,
-            'quiet': True,
-            'no_warnings': True,
-            'nocheckcertificate': True,
-            'impersonate': ImpersonateTarget.from_str('chrome'),
-            'format': format_str,
-        }
-        if merge_fmt:
-            opts['merge_output_format'] = merge_fmt
-        if format_type == "Audio":
-            opts['postprocessors'] = [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}]
-        if with_cookies and os.path.exists(COOKIES_PATH):
-            opts['cookiefile'] = COOKIES_PATH
-        if restricted_clients:
-            opts['extractor_args'] = {'youtube': {'player_client': ['tv', 'android', 'ios', '-web', '-mweb', '-web_safari']}}
-        return opts
+    # Estrategias en orden de preferencia. NUNCA usar cliente web de YouTube sin cookies
+    # porque siempre devuelve "Sign in to confirm you're not a bot".
+    # android_vr y tv_embedded bypasean esta restricción consistentemente.
+    base_opts = {
+        'outtmpl': output_template,
+        'quiet': True,
+        'no_warnings': True,
+        'nocheckcertificate': True,
+        'format': format_str,
+    }
+    if merge_fmt:
+        base_opts['merge_output_format'] = merge_fmt
+    if format_type == "Audio":
+        base_opts['postprocessors'] = [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}]
+
+    strategies = [
+        # Estrategia 1: android_vr + tv_embedded — los más efectivos sin cookies en 2025
+        {**base_opts, 'extractor_args': {'youtube': {'player_client': ['android_vr', 'tv_embedded']}}},
+        # Estrategia 2: android + ios — amplio soporte de formatos hasta 1080p
+        {**base_opts, 'extractor_args': {'youtube': {'player_client': ['android', 'ios']}}},
+        # Estrategia 3: tv + android_vr — fallback final
+        {**base_opts, 'extractor_args': {'youtube': {'player_client': ['tv', 'android_vr']}}},
+    ]
 
     info = None
     last_error = None
-    for attempt, opts in enumerate([build_opts(True, False), build_opts(False, True)], start=1):
+    for attempt, opts in enumerate(strategies, start=1):
         try:
             print(f"[SASDownloader] Intento {attempt} de descarga...")
             with yt_dlp.YoutubeDL(opts) as ydl:
