@@ -566,6 +566,15 @@
   color: var(--danger);
 }
 
+/* Arrow toggle del menú de capa — rota 180° al abrir */
+.layer-menu-arrow {
+  transition: transform 0.2s ease;
+}
+
+.layer-menu-toggle.is-open .layer-menu-arrow {
+  transform: rotate(180deg);
+}
+
 /* Layer menu (3-dot) */
 .layer-menu {
   position: absolute;

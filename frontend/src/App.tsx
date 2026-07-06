@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { ChevronUp, Trash2 } from 'lucide-react';
 import './App.css';
 import { Downloader } from './features/downloader/Downloader';
 import { useTheme } from './context/ThemeContext';
@@ -1531,21 +1532,26 @@ export default function App() {
                           <span className="layer-info">{layer.name}</span>
                           <div className="layer-actions" onClick={(e) => e.stopPropagation()}>
                             <button
-                              className="icon-btn"
+                              className={`icon-btn layer-menu-toggle ${layerMenuOpenId === layer.id ? 'is-open' : ''}`}
                               onClick={() =>
                                 setLayerMenuOpenId(
                                   layerMenuOpenId === layer.id ? null : layer.id
                                 )
                               }
-                              title="Más opciones"
+                              title={layerMenuOpenId === layer.id ? 'Cerrar menú' : 'Más opciones'}
                               aria-label="Más opciones de capa"
                               aria-haspopup="menu"
                               aria-expanded={layerMenuOpenId === layer.id}
                             >
-                              ⋮
+                              <ChevronUp className="size-4 layer-menu-arrow" />
                             </button>
-                            <button className="icon-btn danger" onClick={() => handleDeleteLayer(layer.id)} title="Borrar capa" style={{ fontSize: '10px', fontWeight: 'bold' }}>
-                              BORRAR
+                            <button
+                              className="icon-btn danger"
+                              onClick={() => handleDeleteLayer(layer.id)}
+                              title="Borrar capa"
+                              aria-label="Borrar capa"
+                            >
+                              <Trash2 className="size-4" />
                             </button>
                           </div>
 
