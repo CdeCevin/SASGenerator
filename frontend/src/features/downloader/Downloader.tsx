@@ -24,6 +24,10 @@ type DownloadFormat = "Video" | "Audio"
 
 interface DownloaderProps {
   apiUrl: string
+  /** URL del video controlada por el padre. Se usa para que el paste global
+   *  desde otra pestaña pueda rellenar el formulario. */
+  formUrl: string
+  onFormUrlChange: (url: string) => void
 }
 
 interface FormatOption {
@@ -35,11 +39,12 @@ interface FormatOption {
 
 const FORMAT_OPTIONS: FormatOption[] = [
   { value: "Video", label: "Video", sublabel: "MP4", icon: Video },
-  { value: "Audio", label: "Solo Audio", sublabel: "MP3", icon: Music2 },
+  { value: "Audio", label: "Solo audio", sublabel: "MP3", icon: Music2 },
 ]
 
-export function Downloader({ apiUrl }: DownloaderProps) {
-  const [ytUrl, setYtUrl] = useState<string>("")
+export function Downloader({ apiUrl, formUrl, onFormUrlChange }: DownloaderProps) {
+  const ytUrl = formUrl
+  const setYtUrl = (url: string) => onFormUrlChange(url)
   const [isFetchingFormats, setIsFetchingFormats] = useState<boolean>(false)
   const [formats, setFormats] = useState<string[]>([])
   const [downloadFormat, setDownloadFormat] = useState<DownloadFormat>("Video")

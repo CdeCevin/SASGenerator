@@ -33,6 +33,9 @@ export default function App() {
   const [downloaderUrl] = useState<string>(() => {
     return localStorage.getItem('hf_downloader_url') || import.meta.env.VITE_DOWNLOADER_API_URL || 'https://cdecevin-sasdownloader.hf.space';
   });
+  // URL del video en el formulario del descargador (controlada desde el padre
+  // para permitir que el paste global la rellene desde otra pestaña).
+  const [ytFormUrl, setYtFormUrl] = useState<string>('');
 
   // --- Estados de Quitar Fondo ---
   const [sourceImage, setSourceImage] = useState<string | null>(null);
@@ -165,6 +168,90 @@ export default function App() {
       window.removeEventListener('drop', preventDefault);
     };
   }, []);
+
+  // --- PEGAR DESDE EL PORTAPAPELES (global) ---
+  // - Imagen: en Quitar Fondo → fuente; en Meme → capa de imagen
+  // - Texto: en Meme (con capa de texto seleccionada) → reemplaza; si no → nueva capa
+  // - URL de YouTube: cualquier pestaña → salta al Descargador con la URL
+  useEffect(() => {
+    const isYoutubeUrl = (text: string): boolean => {
+      const t = text.trim();
+      return /(?:youtube\.com|youtu\.be)/i.test(t);
+    };
+
+    const handlePaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      const isInputField =
+        tag === 'input' || tag === 'textarea' || target?.isContentEditable === true;
+
+      const cd = e.clipboardData;
+      if (!cd) return;
+
+      // 1) Imagen del portapapeles
+      if (cd.files && cd.files.length > 0) {
+        const file = cd.files[0];
+        if (file.type.startsWith('image/')) {
+          e.preventDefault();
+          if (activeTab === 'remover') {
+            loadSourceImage(file);
+          } else if (activeTab === 'meme') {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+              addImageLayer(
+                ev.target?.result as string,
+                'Imagen pegada',
+                { x: canvasWidth / 2 - 200, y: canvasHeight / 2 - 200 }
+              );
+            };
+            reader.readAsDataURL(file);
+          }
+          return;
+        }
+      }
+
+      // 2) Texto del portapapeles
+      const text = cd.getData('text/plain');
+      if (!text) return;
+
+      // Las URLs de YouTube SIEMPRE se interceptan, incluso en inputs.
+      if (isYoutubeUrl(text)) {
+        e.preventDefault();
+        setActiveTab('downloader');
+        setYtFormUrl(text.trim());
+        return;
+      }
+
+      // Otro texto: solo actuar si NO está en un input/textarea.
+      if (isInputField) return;
+
+      if (activeTab === 'meme') {
+        e.preventDefault();
+        if (selectedLayerId) {
+          const layer = layers.find((l) => l.id === selectedLayerId);
+          if (layer && layer.type === 'text') {
+            updateSelectedLayer({ text });
+            return;
+          }
+        }
+        addTextLayer(text);
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+    // loadSourceImage y addImageLayer/addTextLayer/updateSelectedLayer se
+    // referencian dentro del handler; al recrear el listener en cada cambio
+    // nos aseguramos de usar las versiones más recientes del estado.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    activeTab,
+    selectedLayerId,
+    layers,
+    layerCounter,
+    canvasWidth,
+    canvasHeight,
+  ]);
 
   // Manejar el cambio de presets de tamaño del lienzo
   const applyPreset = (presetName: string) => {
@@ -314,7 +401,7 @@ export default function App() {
   // -------------------------------------------------------------
   // --- LÓGICA DEL GENERADOR DE MEMES (Canvas) ---
   // -------------------------------------------------------------
-  const handleAddText = () => {
+  const addTextLayer = (initialText?: string) => {
     saveHistory(layers);
     const newLayer: Layer = {
       id: `txt_${layerCounter}`,
@@ -326,7 +413,7 @@ export default function App() {
       height: 100,
       rotation: 0,
       zIndex: layers.length + 1,
-      text: 'DOBLE CLIC AQUÍ',
+      text: initialText ?? 'DOBLE CLIC AQUÍ',
       color: '#ffffff',
       borderColor: '#000000',
       borderWidth: 2,
@@ -339,27 +426,39 @@ export default function App() {
     setSelectedLayerId(newLayer.id);
   };
 
+  const handleAddText = () => {
+    addTextLayer();
+  };
+
+  const addImageLayer = (
+    imageUrl: string,
+    name: string,
+    position?: { x: number; y: number }
+  ) => {
+    saveHistory(layers);
+    const newLayer: Layer = {
+      id: `img_${layerCounter}`,
+      type: 'image',
+      name,
+      x: position?.x ?? canvasWidth / 2 - 200,
+      y: position?.y ?? canvasHeight / 2 - 200,
+      width: 400,
+      height: 400,
+      rotation: 0,
+      zIndex: layers.length + 1,
+      imageUrl,
+    };
+    setLayers([newLayer, ...layers]);
+    setLayerCounter(prev => prev + 1);
+    setSelectedLayerId(newLayer.id);
+  };
+
   const handleAddImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files[0]) {
       const reader = new FileReader();
       reader.onload = (event) => {
-        saveHistory(layers);
-        const newLayer: Layer = {
-          id: `img_${layerCounter}`,
-          type: 'image',
-          name: files[0].name,
-          x: canvasWidth / 2 - 200,
-          y: canvasHeight / 2 - 200,
-          width: 400,
-          height: 400,
-          rotation: 0,
-          zIndex: layers.length + 1,
-          imageUrl: event.target?.result as string,
-        };
-        setLayers([newLayer, ...layers]);
-        setLayerCounter(prev => prev + 1);
-        setSelectedLayerId(newLayer.id);
+        addImageLayer(event.target?.result as string, files[0].name);
       };
       reader.readAsDataURL(files[0]);
     }
@@ -1335,7 +1434,11 @@ export default function App() {
 
         {/* --- PESTAÑA: DESCARGADOR --- */}
         {activeTab === 'downloader' && (
-          <Downloader apiUrl={downloaderUrl} />
+          <Downloader
+            apiUrl={downloaderUrl}
+            formUrl={ytFormUrl}
+            onFormUrlChange={setYtFormUrl}
+          />
         )}
       </main>
     </div>
