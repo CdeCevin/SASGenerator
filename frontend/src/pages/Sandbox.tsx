@@ -20,13 +20,11 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Select } from "@/components/ui/select"
 import {
-  Download,
   Image as ImageIcon,
   Loader2,
   AlertCircle,
   CheckCircle2,
   Palette,
-  Sparkles,
 } from "lucide-react"
 
 export function Sandbox() {
@@ -240,75 +238,104 @@ export function Sandbox() {
 
       {/* Sample downloader panel mockup */}
       <section className="space-y-4">
-        <h2 className="text-xl font-semibold">6. Mockup: Descargador (preview Fase 1)</h2>
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Download className="size-5 text-primary" />
-              <CardTitle>Descargador de YouTube</CardTitle>
-            </div>
-            <CardDescription>Esta es la dirección que tomará la pestaña del descargador.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-2">
-              <Label htmlFor="mock-url">URL del video</Label>
-              <div className="flex gap-2">
+        <h2 className="text-xl font-semibold">6. Mockup: Descargador (Fase 1 aplicada)</h2>
+        <Card className="shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset]">
+          <CardContent className="p-6 sm:p-8 space-y-5">
+            <header className="space-y-1.5">
+              <h3
+                className="text-3xl tracking-tight text-foreground"
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontStyle: "italic",
+                  fontWeight: 400,
+                  lineHeight: 1.1,
+                }}
+              >
+                SAS Downloader
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Pega una URL de YouTube y descárgala en el formato que necesites.
+              </p>
+            </header>
+
+            <div className="space-y-2.5">
+              <Label
+                htmlFor="mock-url"
+                className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+              >
+                URL del video
+              </Label>
+              <div className="flex flex-col sm:flex-row gap-2">
                 <Input
                   id="mock-url"
-                  placeholder="https://www.youtube.com/watch?v=..."
-                  className="flex-1"
+                  placeholder="https://www.youtube.com/watch?v=…"
+                  className="h-12 flex-1 text-base"
                 />
-                <Button variant="secondary">Cargar resoluciones</Button>
+                <Button variant="secondary" className="h-12 px-5">
+                  Buscar formatos
+                </Button>
               </div>
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Formato</Label>
-                <RadioGroup value={radioValue} onValueChange={setRadioValue}>
-                  <div className="flex items-center gap-3">
-                    <RadioGroupItem value="video" id="m1" />
-                    <Label htmlFor="m1" className="font-normal normal-case tracking-normal">
-                      Video (MP4)
-                    </Label>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <RadioGroupItem value="audio" id="m2" />
-                    <Label htmlFor="m2" className="font-normal normal-case tracking-normal">
-                      Solo Audio (MP3)
-                    </Label>
-                  </div>
-                </RadioGroup>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div className="space-y-2.5">
+                <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Formato
+                </Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    aria-pressed="true"
+                    className="flex flex-col items-start gap-1.5 rounded-lg border-2 border-primary bg-primary/10 p-3 text-left"
+                  >
+                    <div className="size-5 rounded bg-primary" />
+                    <span className="text-sm font-semibold leading-none">Video</span>
+                    <span className="text-xs text-muted-foreground leading-none">MP4</span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed="false"
+                    className="flex flex-col items-start gap-1.5 rounded-lg border-2 border-border bg-card p-3 text-left"
+                  >
+                    <div className="size-5 rounded bg-muted" />
+                    <span className="text-sm font-semibold leading-none">Solo audio</span>
+                    <span className="text-xs text-muted-foreground leading-none">MP3</span>
+                  </button>
+                </div>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="mock-quality">Calidad</Label>
-                <Select id="mock-quality" defaultValue="1080p">
-                  <option value="best">Mejor calidad disponible</option>
-                  <option value="1080p">1080p</option>
-                  <option value="720p">720p</option>
+              <div className="space-y-2.5">
+                <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Calidad
+                </Label>
+                <Select className="h-12 text-base" defaultValue="Mejor calidad disponible">
+                  <option>Mejor calidad disponible</option>
+                  <option>1080p</option>
+                  <option>720p</option>
                 </Select>
               </div>
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="mock-name">Nombre del archivo (opcional)</Label>
-              <Input id="mock-name" placeholder="ej: video-epico" />
+            <div className="rounded-lg border border-dashed border-border p-4 flex items-center gap-3">
+              <div className="size-2 rounded-full bg-muted-foreground/40" />
+              <span className="text-sm text-muted-foreground">
+                Pega una URL de YouTube arriba para empezar.
+              </span>
             </div>
 
-            <Separator />
-
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <CheckCircle2 className="size-4 text-[color:var(--success)]" />
-              Listo para descargar
+            <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2">
+              <Button
+                size="lg"
+                className="flex-1 h-12 bg-foreground text-background hover:bg-foreground/90 font-semibold"
+              >
+                Iniciar descarga
+              </Button>
+              <Button variant="outline" size="lg" className="h-12 sm:w-32">
+                Cancelar
+              </Button>
             </div>
-
-            <Button size="xl" className="w-full">
-              <Sparkles />
-              Iniciar descarga
-            </Button>
           </CardContent>
           <CardFooter className="text-xs text-muted-foreground">
-            <ImageIcon className="size-3 mr-1" /> Mockup estático — la lógica real viene en Fase 1.
+            <ImageIcon className="size-3 mr-1" /> Mockup estático — la versión en vivo está en la pestaña Descargador.
           </CardFooter>
         </Card>
       </section>
