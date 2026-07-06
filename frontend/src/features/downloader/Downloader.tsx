@@ -25,22 +25,11 @@ export function Downloader({ apiUrl }: DownloaderProps) {
   const [isDownloading, setIsDownloading] = useState<boolean>(false)
   const [downloadError, setDownloadError] = useState<string | null>(null)
   const [downloadStatus, setDownloadStatus] = useState<string>("")
-  const [logs, setLogs] = useState<string[]>(["[Sistema] Listo para descargar."])
   const abortControllerRef = useRef<AbortController | null>(null)
-
-  const addLog = (message: string) => {
-    const time = new Date().toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    })
-    setLogs((prev) => [...prev, `[${time}] ${message}`])
-  }
 
   const handleFetchFormats = async () => {
     if (!ytUrl.trim()) {
       setDownloadError("Por favor, ingresa una URL válida.")
-      addLog("Error: URL vacía.")
       return
     }
 
@@ -48,14 +37,12 @@ export function Downloader({ apiUrl }: DownloaderProps) {
       setDownloadError(
         "Configura la variable de entorno VITE_DOWNLOADER_API_URL para el servidor de descargas."
       )
-      addLog("Error: URL del servidor de descargas no configurada.")
       return
     }
 
     setIsFetchingFormats(true)
     setDownloadError(null)
     setFormats([])
-    addLog(`Buscando formatos para: ${ytUrl}`)
 
     try {
       const cleanApiUrl = apiUrl.replace(/\/$/, "")
@@ -71,18 +58,12 @@ export function Downloader({ apiUrl }: DownloaderProps) {
       const data = await response.json()
       setFormats(data.formats || ["Mejor calidad disponible"])
       setDownloadQuality("Mejor calidad disponible")
-
-      addLog(`Video encontrado: "${data.title || "Video"}"`)
-      addLog(
-        `Formatos cargados exitosamente: ${data.formats ? data.formats.length : 1} calidades.`
-      )
     } catch (err: unknown) {
       const errMsg =
         err instanceof Error
           ? err.message
           : "Error al buscar formatos en el servidor."
       setDownloadError(errMsg)
-      addLog(`Error al buscar formatos: ${errMsg}`)
     } finally {
       setIsFetchingFormats(false)
     }
@@ -95,20 +76,12 @@ export function Downloader({ apiUrl }: DownloaderProps) {
       setDownloadError(
         "Configura la variable de entorno VITE_DOWNLOADER_API_URL para el servidor de descargas."
       )
-      addLog("Error: URL del servidor de descargas no configurada.")
       return
     }
 
     setIsDownloading(true)
     setDownloadError(null)
     setDownloadStatus("Conectando con el servidor...")
-    addLog(
-      `Iniciando descarga en formato: ${
-        downloadFormat === "Video"
-          ? `Video (MP4 - ${downloadQuality})`
-          : "Audio (MP3)"
-      }`
-    )
 
     const controller = new AbortController()
     abortControllerRef.current = controller
@@ -121,9 +94,6 @@ export function Downloader({ apiUrl }: DownloaderProps) {
         `&quality=${encodeURIComponent(downloadQuality)}` +
         `&custom_name=${encodeURIComponent(customFileName)}`
 
-      addLog(
-        "Descargando y procesando en el servidor (esto puede demorar un par de minutos)..."
-      )
       setDownloadStatus("Descargando y convirtiendo en el servidor...")
 
       const response = await fetch(downloadEndpoint, { signal: controller.signal })
@@ -133,7 +103,6 @@ export function Downloader({ apiUrl }: DownloaderProps) {
         throw new Error(errorData.detail || "El servidor falló durante la descarga.")
       }
 
-      addLog("Descarga finalizada en el servidor. Transfiriendo archivo al navegador...")
       setDownloadStatus("Recibiendo archivo en tu navegador...")
 
       const blob = await response.blob()
@@ -162,16 +131,13 @@ export function Downloader({ apiUrl }: DownloaderProps) {
 
       document.body.removeChild(a)
       window.URL.revokeObjectURL(url)
-
-      addLog(`¡Descarga completada! Archivo guardado: "${filename}"`)
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") {
-        addLog("Descarga cancelada por el usuario.")
+        // User cancelled — no error to show
       } else {
         const errMsg =
           err instanceof Error ? err.message : "Error al procesar la descarga."
         setDownloadError(errMsg)
-        addLog(`Error en la descarga: ${errMsg}`)
       }
     } finally {
       setIsDownloading(false)
@@ -183,26 +149,35 @@ export function Downloader({ apiUrl }: DownloaderProps) {
   const handleCancelDownload = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
-      addLog("Cancelando descarga a petición del usuario...")
     }
   }
 
   const isBusy = isDownloading || isFetchingFormats
 
   return (
-    <div className="max-w-2xl mx-auto p-2 sm:p-4 animate-fade-in">
+    <div className="w-full max-w-5xl mx-auto p-4 sm:p-6 animate-fade-in">
       <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Download className="size-5 text-primary" />
-            <CardTitle>SAS Downloader</CardTitle>
+        <CardHeader className="pb-6">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-primary/10 p-2.5">
+              <Download className="size-6 text-primary" />
+            </div>
+            <div>
+              <CardTitle className="text-2xl">SAS Downloader</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Descarga videos y audio de YouTube en alta calidad
+              </p>
+            </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-5">
-          {/* URL */}
+
+        <CardContent className="space-y-6">
+          {/* URL — full width, prominent */}
           <div className="space-y-2">
-            <Label htmlFor="yt-url">URL del video</Label>
-            <div className="flex flex-col sm:flex-row gap-2">
+            <Label htmlFor="yt-url" className="text-sm">
+              URL del video
+            </Label>
+            <div className="flex flex-col sm:flex-row gap-3">
               <Input
                 id="yt-url"
                 type="text"
@@ -210,12 +185,14 @@ export function Downloader({ apiUrl }: DownloaderProps) {
                 value={ytUrl}
                 onChange={(e) => setYtUrl(e.target.value)}
                 disabled={isBusy}
-                className="flex-1"
+                className="flex-1 h-12 text-base"
               />
               <Button
                 variant="secondary"
+                size="lg"
                 onClick={handleFetchFormats}
                 disabled={isBusy || !ytUrl.trim()}
+                className="h-12 px-6"
               >
                 {isFetchingFormats ? (
                   <>
@@ -229,30 +206,30 @@ export function Downloader({ apiUrl }: DownloaderProps) {
             </div>
           </div>
 
-          {/* Format + Quality */}
-          <div className="grid sm:grid-cols-2 gap-4">
+          {/* Format + Quality — 2 columns */}
+          <div className="grid sm:grid-cols-2 gap-6">
             <div className="space-y-3">
-              <Label>Formato de descarga</Label>
+              <Label className="text-sm">Formato de descarga</Label>
               <RadioGroup
                 value={downloadFormat}
                 onValueChange={(v) => setDownloadFormat(v as DownloadFormat)}
                 disabled={isDownloading}
-                className="space-y-2"
+                className="space-y-3"
               >
-                <div className="flex items-center gap-2.5">
-                  <RadioGroupItem value="Video" id="fmt-video" />
+                <div className="flex items-center gap-3">
+                  <RadioGroupItem value="Video" id="fmt-video" className="size-5" />
                   <Label
                     htmlFor="fmt-video"
-                    className="font-normal normal-case tracking-normal text-sm cursor-pointer"
+                    className="font-normal normal-case tracking-normal text-base cursor-pointer"
                   >
                     Video (MP4)
                   </Label>
                 </div>
-                <div className="flex items-center gap-2.5">
-                  <RadioGroupItem value="Audio" id="fmt-audio" />
+                <div className="flex items-center gap-3">
+                  <RadioGroupItem value="Audio" id="fmt-audio" className="size-5" />
                   <Label
                     htmlFor="fmt-audio"
-                    className="font-normal normal-case tracking-normal text-sm cursor-pointer"
+                    className="font-normal normal-case tracking-normal text-base cursor-pointer"
                   >
                     Solo Audio (MP3)
                   </Label>
@@ -260,14 +237,16 @@ export function Downloader({ apiUrl }: DownloaderProps) {
               </RadioGroup>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="quality">Calidad</Label>
+            <div className="space-y-3">
+              <Label htmlFor="quality" className="text-sm">
+                Calidad
+              </Label>
               <Select
                 id="quality"
                 value={downloadQuality}
                 onChange={(e) => setDownloadQuality(e.target.value)}
                 disabled={isDownloading || downloadFormat !== "Video"}
-                className="w-full"
+                className="h-12 text-base"
               >
                 {formats.length > 0 ? (
                   formats.map((fmt) => (
@@ -286,7 +265,9 @@ export function Downloader({ apiUrl }: DownloaderProps) {
 
           {/* Custom name */}
           <div className="space-y-2">
-            <Label htmlFor="custom-name">Nombre del archivo (opcional)</Label>
+            <Label htmlFor="custom-name" className="text-sm">
+              Nombre del archivo (opcional)
+            </Label>
             <Input
               id="custom-name"
               type="text"
@@ -294,48 +275,49 @@ export function Downloader({ apiUrl }: DownloaderProps) {
               value={customFileName}
               onChange={(e) => setCustomFileName(e.target.value)}
               disabled={isDownloading}
+              className="h-12 text-base"
             />
           </div>
 
           {/* Error */}
           {downloadError && (
             <Alert variant="destructive">
-              <AlertCircle className="size-4" />
-              <AlertDescription>{downloadError}</AlertDescription>
+              <AlertCircle className="size-5" />
+              <AlertDescription className="text-base">{downloadError}</AlertDescription>
             </Alert>
           )}
 
           {/* Status */}
           {isBusy ? (
             <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/10 p-4">
-              <Loader2 className="size-4 animate-spin text-primary" />
-              <span className="text-sm font-medium text-primary">
-                {isDownloading ? downloadStatus : "Buscando formatos..."}
+              <Loader2 className="size-5 animate-spin text-primary" />
+              <span className="text-base font-medium text-primary">
+                {isDownloading ? downloadStatus : "Buscando formatos disponibles..."}
               </span>
             </div>
           ) : (
-            <div className="flex items-center gap-2 text-sm font-semibold text-[color:var(--success)]">
-              <CheckCircle2 className="size-4" />
+            <div className="flex items-center gap-2 text-base font-semibold text-[color:var(--success)]">
+              <CheckCircle2 className="size-5" />
               ¡Listo para descargar!
             </div>
           )}
 
           {/* Actions */}
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
             <Button
               size="xl"
               onClick={handleDownload}
               disabled={isBusy || !ytUrl.trim()}
-              className="flex-[2] tracking-wider"
+              className="flex-[3] h-14 text-lg tracking-wider"
             >
               {isDownloading ? (
                 <>
-                  <Loader2 className="animate-spin" />
+                  <Loader2 className="size-5 animate-spin" />
                   PROCESANDO...
                 </>
               ) : (
                 <>
-                  <Download />
+                  <Download className="size-5" />
                   INICIAR DESCARGA
                 </>
               )}
@@ -344,37 +326,11 @@ export function Downloader({ apiUrl }: DownloaderProps) {
               variant="destructive"
               onClick={handleCancelDownload}
               disabled={!isDownloading}
-              className="flex-1"
+              className="flex-1 h-14 text-base"
             >
-              <X />
+              <X className="size-5" />
               Cancelar
             </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Log */}
-      <Card className="mt-4">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-          <CardTitle className="text-base">Registro de actividad</CardTitle>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setLogs(["[Sistema] Log limpiado."])}
-          >
-            Limpiar log
-          </Button>
-        </CardHeader>
-        <CardContent>
-          <div className="h-32 overflow-y-auto rounded-md border border-border bg-[#050508] p-3 font-mono text-xs leading-relaxed text-[color:var(--success)]">
-            {logs.map((log, idx) => (
-              <div
-                key={idx}
-                className="mb-1 border-b border-border/30 pb-0.5 last:border-b-0"
-              >
-                {log}
-              </div>
-            ))}
           </div>
         </CardContent>
       </Card>
