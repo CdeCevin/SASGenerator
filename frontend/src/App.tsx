@@ -1445,69 +1445,7 @@ export default function App() {
     setCropDragMode(null);
   };
 
-  useEffect(() => {
-    if (!isStylesModalOpen || !selectedLayerId) return;
-    const selectedLayer = layers.find(l => l.id === selectedLayerId);
-    if (!selectedLayer || selectedLayer.type !== 'image' || !selectedLayer.imageUrl) return;
 
-    const img = new Image();
-    img.src = selectedLayer.originalImageUrl || selectedLayer.imageUrl;
-    img.onload = () => {
-      const canvas = document.getElementById('styles-preview-canvas') as HTMLCanvasElement;
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      const maxW = 200;
-      const maxH = 110;
-      let w = img.naturalWidth || img.width;
-      let h = img.naturalHeight || img.height;
-      const aspect = w / h;
-      if (w > maxW) {
-        w = maxW;
-        h = maxW / aspect;
-      }
-      if (h > maxH) {
-        h = maxH;
-        w = maxH * aspect;
-      }
-      canvas.width = w;
-      canvas.height = h;
-
-      ctx.clearRect(0, 0, w, h);
-      
-      const adjustments = selectedLayer.adjustments;
-      if (adjustments) {
-        const filterParts: string[] = [];
-        if (adjustments.brightness !== undefined) filterParts.push(`brightness(${adjustments.brightness}%)`);
-        if (adjustments.contrast !== undefined) filterParts.push(`contrast(${adjustments.contrast}%)`);
-        if (adjustments.saturation !== undefined) filterParts.push(`saturate(${adjustments.saturation}%)`);
-        if (adjustments.hue !== undefined) filterParts.push(`hue-rotate(${adjustments.hue}deg)`);
-        if (adjustments.invert !== undefined) filterParts.push(`invert(${adjustments.invert}%)`);
-        if (adjustments.sepia !== undefined) filterParts.push(`sepia(${adjustments.sepia}%)`);
-        if (adjustments.blur !== undefined && adjustments.blur > 0) filterParts.push(`blur(${adjustments.blur}px)`);
-        
-        if (filterParts.length > 0) {
-          ctx.filter = filterParts.join(' ');
-        }
-      }
-
-      ctx.drawImage(img, 0, 0, w, h);
-      ctx.filter = 'none';
-
-      if (selectedLayer.curvesPoints && selectedLayer.curvesPoints.length > 0) {
-        const imgData = ctx.getImageData(0, 0, w, h);
-        const data = imgData.data;
-        const lut = getCurveLUT(selectedLayer.curvesPoints);
-        for (let i = 0; i < data.length; i += 4) {
-          data[i] = lut[data[i]];
-          data[i+1] = lut[data[i+1]];
-          data[i+2] = lut[data[i+2]];
-        }
-        ctx.putImageData(imgData, 0, 0);
-      }
-    };
-  }, [isStylesModalOpen, selectedLayerId, layers]);
 
   return (
     <div className="app-container">
@@ -2019,7 +1957,7 @@ export default function App() {
         const selectedLayer = layers.find(l => l.id === selectedLayerId);
         if (!selectedLayer) return null;
         return (
-          <div className="modal-overlay animate-fade-in" onClick={() => setIsStylesModalOpen(false)}>
+          <div className="modal-overlay-styles animate-fade-in" onClick={() => setIsStylesModalOpen(false)}>
             <div className="layer-styles-modal" onClick={(e) => e.stopPropagation()}>
               <div className="layer-styles-header">
                 <h3>Estilos de Capa - {selectedLayer.name}</h3>
@@ -2080,63 +2018,7 @@ export default function App() {
                 </div>
                 
                 <div className="layer-styles-content">
-                  {/* Previsualización en tiempo real integrada en el modal */}
-                  <div style={{ marginBottom: '15px' }}>
-                    <span style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>
-                      Previsualización en tiempo real
-                    </span>
-                    {selectedLayer.type === 'text' ? (
-                      <div className="layer-styles-preview-box" style={{
-                        background: 'var(--bg-panel)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '8px',
-                        height: '110px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        overflow: 'hidden',
-                        padding: '10px'
-                      }}>
-                        <span style={{
-                          color: selectedLayer.color || '#ffffff',
-                          fontFamily: selectedLayer.fontFamily || 'Impact',
-                          fontSize: '32px',
-                          fontWeight: 'bold',
-                          textAlign: 'center',
-                          WebkitTextStroke: selectedLayer.borderWidth ? `${selectedLayer.borderWidth}px ${selectedLayer.borderColor}` : undefined,
-                          backgroundColor: selectedLayer.textBackgroundColor || 'transparent',
-                          padding: '8px 16px',
-                          borderRadius: '4px',
-                          wordBreak: 'break-all',
-                          whiteSpace: 'pre-wrap',
-                          lineHeight: 1.1
-                        }}>
-                          {selectedLayer.text || 'Texto de Muestra'}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="layer-styles-preview-box" style={{
-                        background: 'var(--bg-panel)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '8px',
-                        height: '110px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        overflow: 'hidden',
-                        padding: '10px'
-                      }}>
-                        <canvas
-                          id="styles-preview-canvas"
-                          style={{
-                            maxHeight: '100%',
-                            maxWidth: '100%',
-                            objectFit: 'contain'
-                          }}
-                        />
-                      </div>
-                    )}
-                  </div>
+
 
                   {/* Controles de Texto - Relleno */}
                   {selectedLayer.type === 'text' && stylesActiveTab === 'fill' && (
