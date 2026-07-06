@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ChevronUp, Trash2 } from 'lucide-react';
 import './App.css';
 import { Downloader, cleanYoutubeUrl } from './features/downloader/Downloader';
+import { MaskRefinementEditor } from './components/MaskRefinementEditor';
 import { useTheme } from './context/ThemeContext';
 
 interface ImageAdjustments {
@@ -131,6 +132,7 @@ export default function App() {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [processingStatus, setProcessingStatus] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showMaskEditor, setShowMaskEditor] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- Estados del Generador de Memes ---
@@ -1560,7 +1562,8 @@ export default function App() {
       <main className="main-content">
         {/* --- PESTAÑA: QUITAR FONDO --- */}
         {activeTab === 'remover' && (
-          <div className="bg-remover-container animate-fade-in">
+          <>
+            <div className="bg-remover-container animate-fade-in">
             {/* Panel de imagen origen */}
             <div 
               className={`panel ${!sourceImage ? 'interactive' : ''}`}
@@ -1620,12 +1623,19 @@ export default function App() {
               {resultImage ? (
                 <>
                   <img src={resultImage} alt="Después" className="preview-image" />
-                  <div className="actions-row">
+                  <div className="actions-row" style={{ flexWrap: 'wrap', justifyContent: 'center', gap: '8px' }}>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => setShowMaskEditor(true)}
+                      title="Pintar manualmente para corregir bordes o restaurar zonas eliminadas de más"
+                    >
+                      ✏️ Refinar a mano
+                    </button>
                     <button className="btn btn-secondary" onClick={handleDownloadResult}>
                       Guardar PNG
                     </button>
                     <button className="btn btn-accent" onClick={handleSendToCanvas}>
-                      Enviar al Editor de Memes →
+                      Enviar al Editor →
                     </button>
                   </div>
                 </>
@@ -1647,6 +1657,20 @@ export default function App() {
               )}
             </div>
           </div>
+
+          {/* Editor de máscara manual */}
+          {showMaskEditor && sourceImage && resultImage && (
+            <MaskRefinementEditor
+              sourceImage={sourceImage}
+              resultImage={resultImage}
+              onSave={(newResult) => {
+                setResultImage(newResult);
+                setShowMaskEditor(false);
+              }}
+              onClose={() => setShowMaskEditor(false)}
+            />
+          )}
+          </>
         )}
 
         {/* --- PESTAÑA: GENERADOR DE MEMES --- */}
