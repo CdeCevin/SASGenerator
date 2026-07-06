@@ -52,7 +52,7 @@ export function Downloader({ apiUrl }: DownloaderProps) {
 
   const handleFetchFormats = async () => {
     if (!ytUrl.trim()) {
-      setDownloadError("Por favor, ingresa una URL v├ílida.")
+      setDownloadError("Por favor, ingresa una URL válida.")
       return
     }
 
@@ -123,7 +123,7 @@ export function Downloader({ apiUrl }: DownloaderProps) {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || "El servidor fall├│ durante la descarga.")
+        throw new Error(errorData.detail || "El servidor falló durante la descarga.")
       }
 
       setDownloadStatus("Recibiendo archivo en tu navegador...")
@@ -156,7 +156,7 @@ export function Downloader({ apiUrl }: DownloaderProps) {
       window.URL.revokeObjectURL(url)
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") {
-        // User cancelled ÔÇö no error to show
+        // User cancelled — no error to show
       } else {
         const errMsg =
           err instanceof Error ? err.message : "Error al procesar la descarga."
@@ -179,26 +179,26 @@ export function Downloader({ apiUrl }: DownloaderProps) {
   const hasUrl = ytUrl.trim().length > 0
 
   return (
-    <div className="w-full max-w-5xl mx-auto p-6 sm:p-10 animate-fade-in">
-      <Card>
-        <CardHeader className="pb-6">
+    <div className="w-full max-w-5xl mx-auto p-4 sm:p-6 md:p-8 animate-fade-in">
+      <Card className="border border-border bg-card">
+        <CardHeader className="pb-6 border-b border-border/50">
           <div className="flex items-center gap-3">
             <div className="rounded-xl bg-primary/10 p-2.5">
               <Download className="size-6 text-primary" />
             </div>
             <div>
-              <CardTitle className="text-2xl">SAS Downloader</CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
+              <CardTitle className="text-xl sm:text-2xl font-bold">SAS Downloader</CardTitle>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                 Descarga videos y audio de YouTube en alta calidad
               </p>
             </div>
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-6 p-6 sm:p-10 pt-0">
-          {/* URL Tile */}
-          <div className="rounded-xl border border-border bg-muted/30 p-5 sm:p-6 space-y-4">
-            <Label htmlFor="yt-url" className="text-xs uppercase tracking-wider text-muted-foreground">
+        <CardContent className="space-y-6 p-6 sm:p-8">
+          {/* URL Input Row */}
+          <div className="space-y-2">
+            <Label htmlFor="yt-url" className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
               URL del video
             </Label>
             <div className="flex flex-col sm:flex-row gap-2">
@@ -211,23 +211,23 @@ export function Downloader({ apiUrl }: DownloaderProps) {
                   value={ytUrl}
                   onChange={(e) => setYtUrl(e.target.value)}
                   disabled={isBusy}
-                  className="h-12 pl-11 text-base"
+                  className="h-12 pl-11 text-base bg-muted/40 border-border"
                 />
               </div>
               <Button
                 variant="secondary"
                 onClick={handleFetchFormats}
                 disabled={isBusy || !ytUrl.trim()}
-                className="h-12 px-5"
+                className="h-12 px-5 font-semibold text-sm cursor-pointer whitespace-nowrap"
               >
                 {isFetchingFormats ? (
                   <>
-                    <Loader2 className="animate-spin" />
-                    Cargando
+                    <Loader2 className="animate-spin size-4" />
+                    Cargando...
                   </>
                 ) : (
                   <>
-                    <Sparkles />
+                    <Sparkles className="size-4" />
                     Cargar resoluciones
                   </>
                 )}
@@ -235,13 +235,14 @@ export function Downloader({ apiUrl }: DownloaderProps) {
             </div>
           </div>
 
-          {/* Format + Quality Tile (2 columns) */}
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div className="rounded-xl border border-border bg-muted/30 p-5 sm:p-6 space-y-4">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+          {/* Format and Quality Row */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Format Selection (col-span-2) */}
+            <div className="md:col-span-2 space-y-2">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
                 Formato de descarga
               </Label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 {FORMAT_OPTIONS.map((opt) => {
                   const Icon = opt.icon
                   const isSelected = downloadFormat === opt.value
@@ -252,33 +253,36 @@ export function Downloader({ apiUrl }: DownloaderProps) {
                       onClick={() => setDownloadFormat(opt.value)}
                       disabled={isDownloading}
                       className={cn(
-                        "flex flex-col items-start gap-1.5 rounded-lg border-2 p-3 text-left transition-all",
+                        "flex items-center gap-3.5 rounded-lg border p-3 text-left transition-all h-14 cursor-pointer",
                         "hover:border-primary/50 hover:bg-primary/5",
                         "disabled:opacity-50 disabled:cursor-not-allowed",
-                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                         isSelected
-                          ? "border-primary bg-primary/10"
-                          : "border-border bg-card"
+                          ? "border-primary bg-primary/10 text-foreground"
+                          : "border-border bg-muted/40 text-muted-foreground"
                       )}
                     >
-                      <Icon
-                        className={cn(
-                          "size-5",
-                          isSelected ? "text-primary" : "text-muted-foreground"
-                        )}
-                      />
-                      <span className="text-sm font-semibold">{opt.label}</span>
-                      <span className="text-xs text-muted-foreground">{opt.sublabel}</span>
+                      <div className={cn(
+                        "p-1.5 rounded-md shrink-0",
+                        isSelected ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
+                      )}>
+                        <Icon className="size-5" />
+                      </div>
+                      <div className="flex flex-col leading-tight">
+                        <span className="text-sm font-bold text-foreground">{opt.label}</span>
+                        <span className="text-xs text-muted-foreground">{opt.sublabel}</span>
+                      </div>
                     </button>
                   )
                 })}
               </div>
             </div>
 
-            <div className="rounded-xl border border-border bg-muted/30 p-5 sm:p-6 space-y-4">
+            {/* Quality Select (col-span-1) */}
+            <div className="space-y-2">
               <Label
                 htmlFor="quality"
-                className="text-xs uppercase tracking-wider text-muted-foreground"
+                className="text-xs uppercase tracking-wider text-muted-foreground font-semibold"
               >
                 Calidad
               </Label>
@@ -287,16 +291,16 @@ export function Downloader({ apiUrl }: DownloaderProps) {
                 value={downloadQuality}
                 onChange={(e) => setDownloadQuality(e.target.value)}
                 disabled={isDownloading || downloadFormat !== "Video"}
-                className="h-12 text-base"
+                className="h-14 text-base bg-muted/40 border-border"
               >
                 {formats.length > 0 ? (
                   formats.map((fmt) => (
-                    <option key={fmt} value={fmt}>
+                    <option key={fmt} value={fmt} className="bg-card">
                       {fmt}
                     </option>
                   ))
                 ) : (
-                  <option value="Mejor calidad disponible">
+                  <option value="Mejor calidad disponible" className="bg-card">
                     Mejor calidad disponible
                   </option>
                 )}
@@ -304,11 +308,11 @@ export function Downloader({ apiUrl }: DownloaderProps) {
             </div>
           </div>
 
-          {/* Filename Tile */}
-          <div className="rounded-xl border border-border bg-muted/30 p-5 sm:p-6 space-y-4">
+          {/* Filename Input */}
+          <div className="space-y-2">
             <Label
               htmlFor="custom-name"
-              className="text-xs uppercase tracking-wider text-muted-foreground"
+              className="text-xs uppercase tracking-wider text-muted-foreground font-semibold"
             >
               Nombre del archivo <span className="text-muted-foreground/60">(opcional)</span>
             </Label>
@@ -321,49 +325,49 @@ export function Downloader({ apiUrl }: DownloaderProps) {
                 value={customFileName}
                 onChange={(e) => setCustomFileName(e.target.value)}
                 disabled={isDownloading}
-                className="h-12 pl-11 text-base"
+                className="h-12 pl-11 text-base bg-muted/40 border-border"
               />
             </div>
           </div>
 
-          {/* Error */}
+          {/* Error Alert */}
           {downloadError && (
-            <Alert variant="destructive">
+            <Alert variant="destructive" className="border-destructive/30 bg-destructive/10 text-destructive-foreground">
               <AlertCircle className="size-5" />
-              <AlertDescription className="text-base">{downloadError}</AlertDescription>
+              <AlertDescription className="text-base font-medium">{downloadError}</AlertDescription>
             </Alert>
           )}
 
-          {/* Status Tile */}
+          {/* Status Box */}
           {isBusy ? (
-            <div className="rounded-xl border border-primary/30 bg-primary/10 p-5 sm:p-6 flex items-center gap-3">
-              <Loader2 className="size-5 animate-spin text-primary" />
-              <span className="text-base font-medium text-primary">
+            <div className="rounded-xl border border-primary/30 bg-primary/10 p-4 flex items-center gap-3 animate-pulse">
+              <Loader2 className="size-5 animate-spin text-primary shrink-0" />
+              <span className="text-sm sm:text-base font-medium text-primary">
                 {isDownloading ? downloadStatus : "Buscando formatos disponibles..."}
               </span>
             </div>
           ) : hasUrl ? (
-            <div className="rounded-xl border border-[color:var(--success)]/30 bg-[color:var(--success)]/10 p-5 sm:p-6 flex items-center gap-3">
-              <CheckCircle2 className="size-5 text-[color:var(--success)]" />
-              <span className="text-base font-semibold text-[color:var(--success)]">
+            <div className="rounded-xl border border-[color:var(--success)]/30 bg-[color:var(--success)]/10 p-4 flex items-center gap-3">
+              <CheckCircle2 className="size-5 text-[color:var(--success)] shrink-0" />
+              <span className="text-sm sm:text-base font-semibold text-[color:var(--success)]">
                 ¡Listo para descargar!
               </span>
             </div>
           ) : (
-            <div className="rounded-xl border border-border bg-muted/30 p-5 sm:p-6 flex items-center gap-3">
-              <Link2 className="size-5 text-muted-foreground" />
-              <span className="text-base text-muted-foreground">
+            <div className="rounded-xl border border-border bg-muted/20 p-4 flex items-center gap-3">
+              <Link2 className="size-5 text-muted-foreground shrink-0" />
+              <span className="text-sm sm:text-base text-muted-foreground">
                 Pega una URL de YouTube para comenzar.
               </span>
             </div>
           )}
 
-          {/* Actions */}
+          {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
             <Button
               onClick={handleDownload}
               disabled={isBusy || !ytUrl.trim()}
-              className="flex-[3] h-14 text-base font-semibold"
+              className="flex-[3] h-14 text-base font-bold bg-primary hover:bg-[color:var(--primary-hover)] text-primary-foreground shadow-lg shadow-primary/20 cursor-pointer"
               size="lg"
             >
               {isDownloading ? (
@@ -382,7 +386,7 @@ export function Downloader({ apiUrl }: DownloaderProps) {
               variant="destructive"
               onClick={handleCancelDownload}
               disabled={!isDownloading}
-              className="flex-1 h-14"
+              className="flex-1 h-14 border border-destructive/30 bg-destructive/10 hover:bg-destructive/20 text-destructive-foreground font-semibold cursor-pointer"
             >
               <X className="size-5" />
               Cancelar
