@@ -131,12 +131,13 @@ def diagnose(url: str = Query(...)):
 @app.get("/fetch-formats")
 def fetch_formats(url: str = Query(..., description="URL del video de YouTube u otro portal")):
     """Obtiene los formatos y resoluciones de video disponibles."""
-    # Misma lógica que /download: nunca usar cliente web sin cookies
+    # Para LISTAR formatos: android reporta todos los streams DASH (hasta 4K).
+    # android_vr y tv_embedded funcionan bien para DESCARGAR pero listan menos formatos.
     strategies = [
         {'quiet': True, 'no_warnings': True, 'nocheckcertificate': True,
-         'extractor_args': {'youtube': {'player_client': ['android_vr', 'tv_embedded']}}},
-        {'quiet': True, 'no_warnings': True, 'nocheckcertificate': True,
          'extractor_args': {'youtube': {'player_client': ['android', 'ios']}}},
+        {'quiet': True, 'no_warnings': True, 'nocheckcertificate': True,
+         'extractor_args': {'youtube': {'player_client': ['android_vr', 'tv_embedded']}}},
         {'quiet': True, 'no_warnings': True, 'nocheckcertificate': True,
          'extractor_args': {'youtube': {'player_client': ['tv', 'android_vr']}}},
     ]
@@ -273,8 +274,15 @@ def download_video(
         safe_title = "".join(c for c in raw_title if c not in r'\/:*?"<>|').strip()
         download_name = f"{safe_title}{final_extension}"
 
+    # Usar RFC 5987 para soportar nombres con caracteres Unicode/especiales correctamente
+    from urllib.parse import quote
+    encoded_name = quote(download_name, safe='')
+    content_disposition = "attachment; filename=\"{}\"; filename*=UTF-8''{}".format(
+        download_name.replace('"', ''), encoded_name
+    )
+
     return FileResponse(
         filename_real,
         media_type='application/octet-stream',
-        filename=download_name
+        headers={"Content-Disposition": content_disposition}
     )

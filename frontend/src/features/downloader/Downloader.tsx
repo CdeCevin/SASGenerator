@@ -131,18 +131,13 @@ export function Downloader({ apiUrl, formUrl, onFormUrlChange }: DownloaderProps
       a.href = url
 
       const disposition = response.headers.get("content-disposition")
-      let filename = customFileName.trim() ? customFileName.trim() : "descarga"
       const extension = downloadFormat === "Video" ? ".mp4" : ".mp3"
+      let filename = (customFileName.trim() || "descarga") + extension
 
-      if (disposition && disposition.indexOf("filename=") !== -1) {
-        const matches = /filename="?([^";]+)"?/g.exec(disposition)
-        if (matches != null && matches[1]) {
-          filename = matches[1]
-        } else {
-          filename = filename + extension
-        }
-      } else {
-        filename = filename + extension
+      if (disposition) {
+        const match = /filename\*=UTF-8''([^;\s]+)|filename="?([^";]+)"?/i.exec(disposition);
+        if (match?.[1]) filename = decodeURIComponent(match[1]);
+        else if (match?.[2]) filename = match[2].trim();
       }
 
       a.download = filename
