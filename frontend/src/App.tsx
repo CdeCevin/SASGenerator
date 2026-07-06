@@ -1395,7 +1395,7 @@ export default function App() {
     if (!selectedLayer || selectedLayer.type !== 'image') return;
 
     const img = new Image();
-    img.src = selectedLayer.originalImageUrl || selectedLayer.imageUrl || '';
+    img.src = selectedLayer.imageUrl || '';
     img.onload = () => {
       // Coordenadas originales de la imagen (de escala real)
       const scaleX = img.width / selectedLayer.width;
@@ -1446,15 +1446,15 @@ export default function App() {
 
       setLayers(prev => prev.map(l => {
         if (l.id === selectedLayer.id) {
+          const { originalImageUrl: _, ...rest } = l; // Eliminar originalImageUrl para evitar desincronización
           return {
-            ...l,
+            ...rest,
             imageUrl: croppedBase64,
-            originalImageUrl: l.originalImageUrl || l.imageUrl,
             x: newX,
             y: newY,
             width: cropState.w,
             height: cropState.h
-          };
+          } as Layer;
         }
         return l;
       }));
@@ -1697,6 +1697,7 @@ export default function App() {
                     {/* Render de Capas */}
                     {[...layers].sort((a, b) => a.zIndex - b.zIndex).map(layer => {
                       const isSelected = layer.id === selectedLayerId;
+                      const isLayerCropping = cropState && cropState.layerId === layer.id;
                       return (
                         <div
                           key={layer.id}
@@ -1709,10 +1710,9 @@ export default function App() {
                             transform: `rotate(${layer.rotation}deg)`,
                             zIndex: layer.zIndex,
                           }}
-                          onMouseDown={(e) => handleLayerMouseDown(e, layer.id)}
+                          onMouseDown={isLayerCropping ? (e) => e.stopPropagation() : (e) => handleLayerMouseDown(e, layer.id)}
                         >
                           {layer.type === 'image' && layer.imageUrl && (() => {
-                            const isLayerCropping = cropState && cropState.layerId === layer.id;
                             if (isLayerCropping) {
                               const cs = cropState!;
                               return (
@@ -1887,8 +1887,8 @@ export default function App() {
                             </div>
                           )}
 
-                          {/* Tiradores de edición cuando está seleccionada */}
-                          {isSelected && (
+                          {/* Tiradores de edición cuando está seleccionada y no se está recortando */}
+                          {isSelected && !isLayerCropping && (
                             <>
                               <div className="handle handle-tl" onMouseDown={(e) => handleLayerMouseDown(e, layer.id, 'tl')} />
                               <div className="handle handle-tr" onMouseDown={(e) => handleLayerMouseDown(e, layer.id, 'tr')} />
