@@ -66,8 +66,8 @@
   --bg-panel: #f1f5f9;
   --bg-modal: #ffffff;
   --shadow-modal: rgba(15, 23, 42, 0.08);
-  --bg-format-btn: rgba(99, 85, 230, 0.02);
-  --bg-format-icon: rgba(99, 85, 230, 0.06);
+  --bg-format-btn: rgba(99, 85, 230, 0.03);
+  --bg-format-icon: rgba(99, 85, 230, 0.12);
   --bg-tab-hover: rgba(15, 23, 42, 0.04);
   --header-gradient: linear-gradient(135deg, #0f172a 30%, #6355e6 100%);
 
@@ -142,8 +142,8 @@
   --bg-panel: rgba(5, 6, 10, 0.3);
   --bg-modal: #121422;
   --shadow-modal: rgba(0, 0, 0, 0.6);
-  --bg-format-btn: rgba(138, 123, 250, 0.02);
-  --bg-format-icon: rgba(138, 123, 250, 0.08);
+  --bg-format-btn: rgba(138, 123, 250, 0.05);
+  --bg-format-icon: rgba(138, 123, 250, 0.18);
   --bg-tab-hover: rgba(255, 255, 255, 0.03);
   --header-gradient: linear-gradient(135deg, #ffffff 30%, #8a7bfa 100%);
 

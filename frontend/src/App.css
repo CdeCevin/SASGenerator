@@ -343,9 +343,9 @@
 .canvas-outer {
   border: 2px solid var(--border-color);
   border-radius: 8px;
-  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 15px 40px var(--shadow-modal);
   position: relative;
-  background-color: #202023;
+  background-color: #ffffff;
   transition: width 0.3s ease, height 0.3s ease;
   margin: auto;
 }
@@ -1063,7 +1063,7 @@
 .downloader-btn-download {
   flex: 3;
   height: 56px;
-  background: var(--primary);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -1074,13 +1074,14 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  box-shadow: 0 4px 15px rgba(124, 108, 246, 0.2);
+  box-shadow: 0 4px 15px var(--primary-glow);
   transition: all 0.2s ease;
 }
 
 .downloader-btn-download:hover:not(:disabled) {
-  background: var(--primary-hover);
-  box-shadow: 0 6px 20px rgba(124, 108, 246, 0.35);
+  background: linear-gradient(135deg, var(--primary-hover) 0%, var(--primary) 100%);
+  box-shadow: 0 6px 20px var(--primary-glow);
+  transform: translateY(-1px);
 }
 
 .downloader-btn-download:disabled {
@@ -1092,8 +1093,8 @@
 .downloader-btn-cancel {
   flex: 1;
   height: 56px;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
   color: var(--danger);
   border-radius: 8px;
   font-weight: 600;
@@ -1107,7 +1108,9 @@
 }
 
 .downloader-btn-cancel:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.18);
+  background: rgba(239, 68, 68, 0.15);
+  border-color: var(--danger);
+  transform: translateY(-1px);
 }
 
 .downloader-btn-cancel:disabled {
@@ -1134,4 +1137,15 @@
   background: rgba(255, 255, 255, 0.08);
   border-color: var(--primary);
   box-shadow: 0 0 10px var(--primary-glow);
+}
+
+/* Option elements cross-browser fix for dark mode text-visibility */
+select option {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+/* Glowing drop shadow filter for titles in dark mode */
+.section-title {
+  text-shadow: 0 1px 3px var(--primary-glow);
 }
