@@ -179,25 +179,25 @@ export function Downloader({ apiUrl }: DownloaderProps) {
   const hasUrl = ytUrl.trim().length > 0
 
   return (
-    <div className="w-full max-w-4xl mx-auto p-4 sm:p-6 animate-fade-in">
+    <div className="w-full max-w-5xl mx-auto p-6 sm:p-10 animate-fade-in">
       <Card>
-        <CardHeader className="pb-4">
+        <CardHeader className="pb-6">
           <div className="flex items-center gap-3">
             <div className="rounded-xl bg-primary/10 p-2.5">
               <Download className="size-6 text-primary" />
             </div>
             <div>
               <CardTitle className="text-2xl">SAS Downloader</CardTitle>
-              <p className="text-sm text-muted-foreground mt-0.5">
+              <p className="text-sm text-muted-foreground mt-1">
                 Descarga videos y audio de YouTube en alta calidad
               </p>
             </div>
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-6 p-6 sm:p-10 pt-0">
           {/* URL Tile */}
-          <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
+          <div className="rounded-xl border border-border bg-muted/30 p-5 sm:p-6 space-y-4">
             <Label htmlFor="yt-url" className="text-xs uppercase tracking-wider text-muted-foreground">
               URL del video
             </Label>
@@ -236,8 +236,8 @@ export function Downloader({ apiUrl }: DownloaderProps) {
           </div>
 
           {/* Format + Quality Tile (2 columns) */}
-          <div className="grid sm:grid-cols-2 gap-3">
-            <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="rounded-xl border border-border bg-muted/30 p-5 sm:p-6 space-y-4">
               <Label className="text-xs uppercase tracking-wider text-muted-foreground">
                 Formato de descarga
               </Label>
@@ -252,7 +252,7 @@ export function Downloader({ apiUrl }: DownloaderProps) {
                       onClick={() => setDownloadFormat(opt.value)}
                       disabled={isDownloading}
                       className={cn(
-                        "flex flex-col items-start gap-1 rounded-lg border-2 p-3 text-left transition-all",
+                        "flex flex-col items-start gap-1.5 rounded-lg border-2 p-3 text-left transition-all",
                         "hover:border-primary/50 hover:bg-primary/5",
                         "disabled:opacity-50 disabled:cursor-not-allowed",
                         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
@@ -275,7 +275,7 @@ export function Downloader({ apiUrl }: DownloaderProps) {
               </div>
             </div>
 
-            <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
+            <div className="rounded-xl border border-border bg-muted/30 p-5 sm:p-6 space-y-4">
               <Label
                 htmlFor="quality"
                 className="text-xs uppercase tracking-wider text-muted-foreground"
@@ -305,7 +305,7 @@ export function Downloader({ apiUrl }: DownloaderProps) {
           </div>
 
           {/* Filename Tile */}
-          <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
+          <div className="rounded-xl border border-border bg-muted/30 p-5 sm:p-6 space-y-4">
             <Label
               htmlFor="custom-name"
               className="text-xs uppercase tracking-wider text-muted-foreground"
@@ -317,7 +317,7 @@ export function Downloader({ apiUrl }: DownloaderProps) {
               <Input
                 id="custom-name"
                 type="text"
-                placeholder="ej: video-epico (se usar├í el t├¡tulo original si lo omites)"
+                placeholder="ej: video-epico (se usará el título original si lo omites)"
                 value={customFileName}
                 onChange={(e) => setCustomFileName(e.target.value)}
                 disabled={isDownloading}
@@ -336,21 +336,21 @@ export function Downloader({ apiUrl }: DownloaderProps) {
 
           {/* Status Tile */}
           {isBusy ? (
-            <div className="rounded-xl border border-primary/30 bg-primary/10 p-4 flex items-center gap-3">
+            <div className="rounded-xl border border-primary/30 bg-primary/10 p-5 sm:p-6 flex items-center gap-3">
               <Loader2 className="size-5 animate-spin text-primary" />
               <span className="text-base font-medium text-primary">
                 {isDownloading ? downloadStatus : "Buscando formatos disponibles..."}
               </span>
             </div>
           ) : hasUrl ? (
-            <div className="rounded-xl border border-[color:var(--success)]/30 bg-[color:var(--success)]/10 p-4 flex items-center gap-3">
+            <div className="rounded-xl border border-[color:var(--success)]/30 bg-[color:var(--success)]/10 p-5 sm:p-6 flex items-center gap-3">
               <CheckCircle2 className="size-5 text-[color:var(--success)]" />
               <span className="text-base font-semibold text-[color:var(--success)]">
-                ┬íListo para descargar!
+                ¡Listo para descargar!
               </span>
             </div>
           ) : (
-            <div className="rounded-xl border border-border bg-muted/30 p-4 flex items-center gap-3">
+            <div className="rounded-xl border border-border bg-muted/30 p-5 sm:p-6 flex items-center gap-3">
               <Link2 className="size-5 text-muted-foreground" />
               <span className="text-base text-muted-foreground">
                 Pega una URL de YouTube para comenzar.
@@ -363,7 +363,7 @@ export function Downloader({ apiUrl }: DownloaderProps) {
             <Button
               onClick={handleDownload}
               disabled={isBusy || !ytUrl.trim()}
-              className="flex-[3] h-12 text-base font-semibold"
+              className="flex-[3] h-14 text-base font-semibold"
               size="lg"
             >
               {isDownloading ? (
@@ -382,7 +382,7 @@ export function Downloader({ apiUrl }: DownloaderProps) {
               variant="destructive"
               onClick={handleCancelDownload}
               disabled={!isDownloading}
-              className="flex-1 h-12"
+              className="flex-1 h-14"
             >
               <X className="size-5" />
               Cancelar
