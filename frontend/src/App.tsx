@@ -10,6 +10,8 @@ interface ImageAdjustments {
   saturation: number;  // 0–200, 100 = normal
   hue: number;         // -180 to 180, 0 = normal
   blur: number;        // 0–20 px
+  invert: number;      // 0–100, 0 = normal, 100 = invertido
+  sepia: number;       // 0–100, 0 = normal, 100 = sepia completo
 }
 
 interface Layer {
@@ -42,6 +44,8 @@ const defaultAdjustments = (): ImageAdjustments => ({
   saturation: 100,
   hue: 0,
   blur: 0,
+  invert: 0,
+  sepia: 0,
 });
 
 // Convierte los ajustes a un string CSS `filter` o a un string para `ctx.filter`.
@@ -53,7 +57,9 @@ const adjustmentsToFilter = (a?: ImageAdjustments): string => {
     a.contrast === 100 &&
     a.saturation === 100 &&
     a.hue === 0 &&
-    a.blur === 0;
+    a.blur === 0 &&
+    a.invert === 0 &&
+    a.sepia === 0;
   if (isDefault) return '';
   return [
     `brightness(${a.brightness}%)`,
@@ -61,6 +67,8 @@ const adjustmentsToFilter = (a?: ImageAdjustments): string => {
     `saturate(${a.saturation}%)`,
     `hue-rotate(${a.hue}deg)`,
     a.blur > 0 ? `blur(${a.blur}px)` : '',
+    a.invert > 0 ? `invert(${a.invert}%)` : '',
+    a.sepia > 0 ? `sepia(${a.sepia}%)` : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -219,11 +227,18 @@ export default function App() {
   }, []);
 
   // Cerrar el panel de propiedades expandido al hacer clic fuera o pulsar Escape.
+  // Importante: NO cerrar si el click es dentro del sidebar (la scrollbar del
+  // sidebar dispara mousedown y cerraba el panel mientras el usuario hacía
+  // scroll). Solo cerramos cuando el click es fuera del sidebar o en el canvas.
   useEffect(() => {
     if (!expandedLayerId) return;
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
-      if (target?.closest('.layer-properties-panel')) return;
+      // Si el click es dentro del sidebar, no cerrar (incluye la scrollbar,
+      // los items de la lista, y el propio panel de propiedades).
+      if (target?.closest('.control-sidebar')) return;
+      // Si el click es en el botón toggle de la flecha, el onClick del botón
+      // se encarga de togglear.
       if (target?.closest('.layer-menu-toggle')) return;
       setExpandedLayerId(null);
     };
@@ -1855,22 +1870,65 @@ function LayerPropertiesPanel({ layer, onUpdate }: LayerPropertiesPanelProps) {
             />
           </div>
 
-          {/* Ajustes de color (mini-photoshop) */}
+          {/* Ajustes de imagen (mini-photoshop) */}
           <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', marginTop: '8px' }}>
-            <span style={{ display: 'block', fontWeight: 600, marginBottom: '8px', color: 'var(--primary-hover)', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.08em' }}>
-              Ajustes de color
+            <span style={{ display: 'block', fontWeight: 600, marginBottom: '10px', color: 'var(--primary-hover)', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.08em' }}>
+              Ajustes de imagen
             </span>
+
+            {/* Presets al estilo Photoshop (Imagen > Ajustes) */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px', marginBottom: '12px' }}>
+              {(
+                [
+                  {
+                    label: 'Blanco y negro',
+                    apply: { saturation: 0 },
+                  },
+                  {
+                    label: 'Sepia',
+                    apply: { sepia: 80 },
+                  },
+                  {
+                    label: 'Frío',
+                    apply: { hue: -15, saturation: 110 },
+                  },
+                  {
+                    label: 'Cálido',
+                    apply: { hue: 15, saturation: 110 },
+                  },
+                  {
+                    label: 'Alto contraste',
+                    apply: { contrast: 140, saturation: 120 },
+                  },
+                  {
+                    label: 'Invertir',
+                    apply: { invert: 100 },
+                  },
+                ] as const
+              ).map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  className="layer-preset-btn"
+                  onClick={() => onUpdate({ adjustments: { ...defaultAdjustments(), ...preset.apply } })}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
 
             {(
               [
-                { key: 'brightness', label: 'Brillo', min: 0, max: 200, step: 1 },
-                { key: 'contrast', label: 'Contraste', min: 0, max: 200, step: 1 },
-                { key: 'saturation', label: 'Saturación', min: 0, max: 200, step: 1 },
-                { key: 'hue', label: 'Tono', min: -180, max: 180, step: 1 },
-                { key: 'blur', label: 'Desenfoque', min: 0, max: 20, step: 0.5 },
+                { key: 'brightness', label: 'Brillo', min: 0, max: 200, step: 1, unit: '%', defaultVal: 100 },
+                { key: 'contrast', label: 'Contraste', min: 0, max: 200, step: 1, unit: '%', defaultVal: 100 },
+                { key: 'saturation', label: 'Saturación', min: 0, max: 200, step: 1, unit: '%', defaultVal: 100 },
+                { key: 'hue', label: 'Tono', min: -180, max: 180, step: 1, unit: '°', defaultVal: 0 },
+                { key: 'invert', label: 'Invertir', min: 0, max: 100, step: 1, unit: '%', defaultVal: 0 },
+                { key: 'sepia', label: 'Sepia', min: 0, max: 100, step: 1, unit: '%', defaultVal: 0 },
+                { key: 'blur', label: 'Desenfoque', min: 0, max: 20, step: 0.5, unit: 'px', defaultVal: 0 },
               ] as const
-            ).map(({ key, label, min, max, step }) => {
-              const value = layer.adjustments?.[key] ?? (key === 'hue' ? 0 : 100);
+            ).map(({ key, label, min, max, step, unit, defaultVal }) => {
+              const value = layer.adjustments?.[key] ?? defaultVal;
               return (
                 <div key={key} className="form-group" style={{ marginBottom: '8px' }}>
                   <div className="range-control-group">
@@ -1886,7 +1944,7 @@ function LayerPropertiesPanel({ layer, onUpdate }: LayerPropertiesPanelProps) {
                       }}
                     />
                     <span style={{ minWidth: 36, textAlign: 'right' }}>
-                      {value}{key === 'hue' ? '°' : key === 'blur' ? 'px' : '%'}
+                      {value}{unit}
                     </span>
                   </div>
                   <label style={{ fontSize: '11px', marginTop: '2px' }}>{label}</label>

@@ -618,6 +618,35 @@
   font-weight: 600;
 }
 
+/* Botones de preset de ajustes (estilo Photoshop) */
+.layer-preset-btn {
+  background: var(--muted);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 6px 4px;
+  font-size: 10.5px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  text-align: center;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.layer-preset-btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--primary);
+  color: var(--text-primary);
+}
+
+.layer-preset-btn:active {
+  transform: scale(0.97);
+}
+
 /* Inputs & Form controls */
 .form-group {
   display: flex;
