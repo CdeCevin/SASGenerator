@@ -12,20 +12,12 @@ import {
   Sparkles,
 } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
 
 type DownloadFormat = "Video" | "Audio"
 
 interface DownloaderProps {
   apiUrl: string
-  /** URL del video controlada por el padre. Se usa para que el paste global
-   *  desde otra pestaña pueda rellenar el formulario. */
   formUrl: string
   onFormUrlChange: (url: string) => void
 }
@@ -39,12 +31,12 @@ interface FormatOption {
 
 const FORMAT_OPTIONS: FormatOption[] = [
   { value: "Video", label: "Video", sublabel: "MP4", icon: Video },
-  { value: "Audio", label: "Solo audio", sublabel: "MP3", icon: Music2 },
+  { value: "Audio", label: "Solo Audio", sublabel: "MP3", icon: Music2 },
 ]
 
 export function Downloader({ apiUrl, formUrl, onFormUrlChange }: DownloaderProps) {
   const ytUrl = formUrl
-  const setYtUrl = (url: string) => onFormUrlChange(url)
+  const setYtUrl = onFormUrlChange
   const [isFetchingFormats, setIsFetchingFormats] = useState<boolean>(false)
   const [formats, setFormats] = useState<string[]>([])
   const [downloadFormat, setDownloadFormat] = useState<DownloadFormat>("Video")
@@ -184,46 +176,47 @@ export function Downloader({ apiUrl, formUrl, onFormUrlChange }: DownloaderProps
   const hasUrl = ytUrl.trim().length > 0
 
   return (
-    <div className="w-full max-w-5xl mx-auto p-4 sm:p-6 md:p-8 animate-fade-in">
-      <Card className="border border-border bg-card">
-        <CardHeader className="pb-6 border-b border-border/50">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-primary/10 p-2.5">
-              <Download className="size-6 text-primary" />
-            </div>
-            <div>
-              <CardTitle className="text-xl sm:text-2xl font-bold">SAS Downloader</CardTitle>
-              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                Descarga videos y audio de YouTube en alta calidad
-              </p>
-            </div>
+    <div className="w-full max-w-4xl mx-auto p-4 sm:p-6 md:p-8 animate-fade-in flex justify-center">
+      {/* Contenedor Principal (Tarjeta) */}
+      <div className="w-full border border-border bg-card rounded-xl text-card-foreground shadow-lg flex flex-col overflow-hidden">
+        {/* Cabecera */}
+        <div className="p-6 border-b border-border/50 flex items-center gap-3">
+          <div className="rounded-xl bg-primary/10 p-2.5">
+            <Download className="size-6 text-primary" />
           </div>
-        </CardHeader>
+          <div>
+            <h2 className="text-xl sm:text-2xl font-bold text-foreground">SAS Downloader</h2>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+              Descarga videos y audio de YouTube en alta calidad
+            </p>
+          </div>
+        </div>
 
-        <CardContent className="space-y-6 p-6 sm:p-8">
+        {/* Formulario */}
+        <div className="p-6 sm:p-8 flex flex-col gap-6">
           {/* URL Input Row */}
-          <div className="space-y-2">
-            <Label htmlFor="yt-url" className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+          <div className="flex flex-col gap-2">
+            <label htmlFor="yt-url" className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
               URL del video
-            </Label>
-            <div className="flex flex-col sm:flex-row gap-2">
+            </label>
+            <div className="flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1">
                 <Link2 className="absolute left-3.5 top-1/2 -translate-y-1/2 size-5 text-muted-foreground pointer-events-none" />
-                <Input
+                <input
                   id="yt-url"
                   type="text"
                   placeholder="https://www.youtube.com/watch?v=..."
                   value={ytUrl}
                   onChange={(e) => setYtUrl(e.target.value)}
                   disabled={isBusy}
-                  className="h-12 pl-11 text-base bg-muted/40 border-border"
+                  className="h-12 pl-11 pr-4 py-2 w-full rounded-lg border border-border bg-muted/40 text-base text-foreground placeholder:text-muted-foreground transition-colors focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50"
                 />
               </div>
-              <Button
-                variant="secondary"
+              <button
+                type="button"
                 onClick={handleFetchFormats}
                 disabled={isBusy || !ytUrl.trim()}
-                className="h-12 px-5 font-semibold text-sm cursor-pointer whitespace-nowrap"
+                className="h-12 px-5 font-semibold text-sm bg-muted border border-border hover:bg-muted/80 text-foreground rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
               >
                 {isFetchingFormats ? (
                   <>
@@ -236,17 +229,17 @@ export function Downloader({ apiUrl, formUrl, onFormUrlChange }: DownloaderProps
                     Cargar resoluciones
                   </>
                 )}
-              </Button>
+              </button>
             </div>
           </div>
 
           {/* Format and Quality Row */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Format Selection (col-span-2) */}
-            <div className="md:col-span-2 space-y-2">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+            <div className="md:col-span-2 flex flex-col gap-2">
+              <label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
                 Formato de descarga
-              </Label>
+              </label>
               <div className="grid grid-cols-2 gap-3">
                 {FORMAT_OPTIONS.map((opt) => {
                   const Icon = opt.icon
@@ -284,19 +277,19 @@ export function Downloader({ apiUrl, formUrl, onFormUrlChange }: DownloaderProps
             </div>
 
             {/* Quality Select (col-span-1) */}
-            <div className="space-y-2">
-              <Label
+            <div className="flex flex-col gap-2">
+              <label
                 htmlFor="quality"
                 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold"
               >
                 Calidad
-              </Label>
-              <Select
+              </label>
+              <select
                 id="quality"
                 value={downloadQuality}
                 onChange={(e) => setDownloadQuality(e.target.value)}
                 disabled={isDownloading || downloadFormat !== "Video"}
-                className="h-14 text-base bg-muted/40 border-border"
+                className="h-14 w-full items-center justify-between rounded-lg border border-border bg-muted/40 px-3 py-2 text-base text-foreground focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {formats.length > 0 ? (
                   formats.map((fmt) => (
@@ -309,38 +302,38 @@ export function Downloader({ apiUrl, formUrl, onFormUrlChange }: DownloaderProps
                     Mejor calidad disponible
                   </option>
                 )}
-              </Select>
+              </select>
             </div>
           </div>
 
           {/* Filename Input */}
-          <div className="space-y-2">
-            <Label
+          <div className="flex flex-col gap-2">
+            <label
               htmlFor="custom-name"
               className="text-xs uppercase tracking-wider text-muted-foreground font-semibold"
             >
               Nombre del archivo <span className="text-muted-foreground/60">(opcional)</span>
-            </Label>
+            </label>
             <div className="relative">
               <FileText className="absolute left-3.5 top-1/2 -translate-y-1/2 size-5 text-muted-foreground pointer-events-none" />
-              <Input
+              <input
                 id="custom-name"
                 type="text"
                 placeholder="ej: video-epico (se usará el título original si lo omites)"
                 value={customFileName}
                 onChange={(e) => setCustomFileName(e.target.value)}
                 disabled={isDownloading}
-                className="h-12 pl-11 text-base bg-muted/40 border-border"
+                className="h-12 pl-11 pr-4 py-2 w-full rounded-lg border border-border bg-muted/40 text-base text-foreground placeholder:text-muted-foreground transition-colors focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
           </div>
 
           {/* Error Alert */}
           {downloadError && (
-            <Alert variant="destructive" className="border-destructive/30 bg-destructive/10 text-destructive-foreground">
-              <AlertCircle className="size-5" />
-              <AlertDescription className="text-base font-medium">{downloadError}</AlertDescription>
-            </Alert>
+            <div className="rounded-lg border border-destructive/30 bg-destructive/10 text-destructive-foreground p-4 flex items-center gap-3">
+              <AlertCircle className="size-5 shrink-0" />
+              <span className="text-sm sm:text-base font-medium">{downloadError}</span>
+            </div>
           )}
 
           {/* Status Box */}
@@ -369,11 +362,11 @@ export function Downloader({ apiUrl, formUrl, onFormUrlChange }: DownloaderProps
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            <Button
+            <button
+              type="button"
               onClick={handleDownload}
               disabled={isBusy || !ytUrl.trim()}
-              className="flex-[3] h-14 text-base font-bold bg-primary hover:bg-[color:var(--primary-hover)] text-primary-foreground shadow-lg shadow-primary/20 cursor-pointer"
-              size="lg"
+              className="flex-[3] h-14 text-base font-bold bg-primary hover:bg-[color:var(--primary-hover)] text-primary-foreground shadow-lg shadow-primary/20 rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isDownloading ? (
                 <>
@@ -386,19 +379,19 @@ export function Downloader({ apiUrl, formUrl, onFormUrlChange }: DownloaderProps
                   Iniciar descarga
                 </>
               )}
-            </Button>
-            <Button
-              variant="destructive"
+            </button>
+            <button
+              type="button"
               onClick={handleCancelDownload}
               disabled={!isDownloading}
-              className="flex-1 h-14 border border-destructive/30 bg-destructive/10 hover:bg-destructive/20 text-destructive-foreground font-semibold cursor-pointer"
+              className="flex-1 h-14 border border-destructive/30 bg-destructive/10 hover:bg-destructive/20 text-destructive-foreground font-semibold rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-colors"
             >
               <X className="size-5" />
               Cancelar
-            </Button>
+            </button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   )
 }
