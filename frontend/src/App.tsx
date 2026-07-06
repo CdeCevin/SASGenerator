@@ -1850,9 +1850,24 @@ export default function App() {
                           onDrop={(e) => handleLayerDrop(e, layer.id)}
                           style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', marginBottom: '4px', borderRadius: '6px', background: isActive ? 'var(--primary-glow)' : 'rgba(255,255,255,0.02)', cursor: 'pointer', border: isActive ? '1px solid var(--primary)' : '1px solid transparent' }}
                         >
-                          <span style={{ fontSize: '13px', color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }}>
-                            {layer.type === 'text' ? 'Texto: ' : 'Imagen: '}{layer.name}
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                            {layer.type === 'image' && layer.imageUrl ? (
+                              <img
+                                src={layer.imageUrl}
+                                alt={layer.name}
+                                className="layer-thumbnail"
+                                draggable={false}
+                                style={{ width: '28px', height: '28px', objectFit: 'cover', borderRadius: '4px', background: '#333' }}
+                              />
+                            ) : (
+                              <div className="layer-thumbnail layer-thumbnail-text" style={{ width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#444', color: '#fff', borderRadius: '4px', fontWeight: 'bold', fontSize: '12px' }}>
+                                T
+                              </div>
+                            )}
+                            <span style={{ fontSize: '13px', color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }}>
+                              {layer.name}
+                            </span>
+                          </div>
                           <div style={{ display: 'flex', gap: '4px' }}>
                             <button
                               className="icon-btn danger"
