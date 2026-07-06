@@ -131,19 +131,17 @@ def diagnose(url: str = Query(...)):
 @app.get("/fetch-formats")
 def fetch_formats(url: str = Query(..., description="URL del video de YouTube u otro portal")):
     """Obtiene los formatos y resoluciones de video disponibles."""
-    # Impersonate Chrome a nivel TLS para evitar detección de bot.
-    # Sin esto, las peticiones parecen Python puro y YouTube las bloquea.
     chrome = ImpersonateTarget.from_str('chrome')
     strategies = [
+        # Estrategia 1: android_vr y tv_embedded sin clientes web/móviles.
+        # Bypassea la detección de bot de forma limpia y obtiene todas las calidades (1080p, 720p, etc.)
         {'quiet': True, 'no_warnings': True, 'nocheckcertificate': True,
          'impersonate': chrome,
-         'extractor_args': {'youtube': {'player_client': ['android', 'ios']}}},
+         'extractor_args': {'youtube': {'player_client': ['android_vr', 'tv_embedded', '-web', '-mweb', '-web_safari', '-android', '-ios']}}},
+        # Estrategia 2: tv, tv_embedded y android_vr (fallback)
         {'quiet': True, 'no_warnings': True, 'nocheckcertificate': True,
          'impersonate': chrome,
-         'extractor_args': {'youtube': {'player_client': ['android_vr', 'tv_embedded']}}},
-        {'quiet': True, 'no_warnings': True, 'nocheckcertificate': True,
-         'impersonate': chrome,
-         'extractor_args': {'youtube': {'player_client': ['tv', 'android_vr']}}},
+         'extractor_args': {'youtube': {'player_client': ['tv', 'tv_embedded', 'android_vr', '-web', '-mweb', '-web_safari', '-android', '-ios']}}},
     ]
 
     info = None
@@ -225,12 +223,11 @@ def download_video(
         base_opts['postprocessors'] = [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}]
 
     strategies = [
-        # Estrategia 1: android_vr + tv_embedded — los más efectivos sin cookies en 2025
-        {**base_opts, 'extractor_args': {'youtube': {'player_client': ['android_vr', 'tv_embedded']}}},
-        # Estrategia 2: android + ios — amplio soporte de formatos hasta 1080p
-        {**base_opts, 'extractor_args': {'youtube': {'player_client': ['android', 'ios']}}},
-        # Estrategia 3: tv + android_vr — fallback final
-        {**base_opts, 'extractor_args': {'youtube': {'player_client': ['tv', 'android_vr']}}},
+        # Estrategia 1: android_vr y tv_embedded sin clientes web/móviles.
+        # Evita el bloqueo de bot y descarga a la calidad solicitada (1080p/720p/etc.)
+        {**base_opts, 'extractor_args': {'youtube': {'player_client': ['android_vr', 'tv_embedded', '-web', '-mweb', '-web_safari', '-android', '-ios']}}},
+        # Estrategia 2: tv, tv_embedded y android_vr (fallback)
+        {**base_opts, 'extractor_args': {'youtube': {'player_client': ['tv', 'tv_embedded', 'android_vr', '-web', '-mweb', '-web_safari', '-android', '-ios']}}},
     ]
 
     info = None
