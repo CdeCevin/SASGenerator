@@ -34,6 +34,7 @@ interface Layer {
   textBackgroundColor?: string; // Fondo opcional detrás del texto
   // Campos de Imagen
   imageUrl?: string;
+  originalImageUrl?: string;
   adjustments?: ImageAdjustments; // Ajustes de color (mini-photoshop)
 }
 
@@ -118,6 +119,18 @@ export default function App() {
   // Historial para deshacer (Ctrl+Z) y arrastre de capas en la lista
   const [history, setHistory] = useState<Layer[][]>([]);
   const [draggedLayerId, setDraggedLayerId] = useState<string | null>(null);
+
+  // --- Estados de Modales Auxiliares (Photoshop Layer Styles & Crop) ---
+  const [isStylesModalOpen, setIsStylesModalOpen] = useState<boolean>(false);
+  const [isCropModalOpen, setIsCropModalOpen] = useState<boolean>(false);
+  const [stylesActiveTab, setStylesActiveTab] = useState<'fill' | 'stroke' | 'background' | 'adjustments' | 'presets'>('fill');
+
+  // Estados del Crop (Recorte)
+  const [cropX, setCropX] = useState<number>(0);
+  const [cropY, setCropY] = useState<number>(0);
+  const [cropW, setCropW] = useState<number>(100);
+  const [cropH, setCropH] = useState<number>(100);
+  const [cropImgDims, setCropImgDims] = useState<{ width: number; height: number }>({ width: 100, height: 100 });
 
   const saveHistory = (currentLayers: Layer[]) => {
     setHistory(prev => {
@@ -459,6 +472,7 @@ export default function App() {
       rotation: 0,
       zIndex: layers.length + 1,
       imageUrl: resultImage,
+      originalImageUrl: resultImage,
     };
 
     setLayers([newLayer, ...layers]);
@@ -533,6 +547,7 @@ export default function App() {
       rotation: 0,
       zIndex: layers.length + 1,
       imageUrl,
+      originalImageUrl: imageUrl,
     };
     setLayers([newLayer, ...layers]);
     setLayerCounter(prev => prev + 1);
@@ -1140,6 +1155,119 @@ export default function App() {
     }
   };
 
+  const handleOpenCropModal = () => {
+    const selectedLayer = layers.find(l => l.id === selectedLayerId);
+    if (!selectedLayer || selectedLayer.type !== 'image') return;
+    const img = new Image();
+    img.src = selectedLayer.originalImageUrl || selectedLayer.imageUrl || '';
+    img.onload = () => {
+      setCropImgDims({ width: img.width, height: img.height });
+      setCropX(0);
+      setCropY(0);
+      setCropW(img.width);
+      setCropH(img.height);
+      setIsCropModalOpen(true);
+    };
+  };
+
+  const handleApplyCrop = () => {
+    const selectedLayer = layers.find(l => l.id === selectedLayerId);
+    if (!selectedLayer || selectedLayer.type !== 'image') return;
+    const img = new Image();
+    img.src = selectedLayer.originalImageUrl || selectedLayer.imageUrl || '';
+    img.onload = () => {
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = cropW;
+      tempCanvas.height = cropH;
+      const tempCtx = tempCanvas.getContext('2d');
+      if (!tempCtx) return;
+      
+      tempCtx.drawImage(
+        img,
+        cropX,
+        cropY,
+        cropW,
+        cropH,
+        0,
+        0,
+        cropW,
+        cropH
+      );
+      
+      const croppedBase64 = tempCanvas.toDataURL('image/png');
+      saveHistory(layers);
+      
+      const newAspect = cropW / cropH;
+      const newHeight = selectedLayer.width / newAspect;
+
+      setLayers(prev => prev.map(l => {
+        if (l.id === selectedLayer.id) {
+          return {
+            ...l,
+            imageUrl: croppedBase64,
+            originalImageUrl: l.originalImageUrl || l.imageUrl,
+            height: newHeight,
+          };
+        }
+        return l;
+      }));
+
+      setIsCropModalOpen(false);
+    };
+  };
+
+  // Dibujar previsualización del recorte en tiempo real en un canvas
+  useEffect(() => {
+    if (!isCropModalOpen || !selectedLayerId) return;
+    const selectedLayer = layers.find(l => l.id === selectedLayerId);
+    if (!selectedLayer || selectedLayer.type !== 'image') return;
+
+    const img = new Image();
+    img.src = selectedLayer.originalImageUrl || selectedLayer.imageUrl || '';
+    img.onload = () => {
+      const canvas = document.getElementById('crop-preview-canvas') as HTMLCanvasElement;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      
+      const maxW = 400;
+      const maxH = 280;
+      let w = img.width;
+      let h = img.height;
+      const aspect = w / h;
+      if (w > maxW) {
+        w = maxW;
+        h = maxW / aspect;
+      }
+      if (h > maxH) {
+        h = maxH;
+        w = maxH * aspect;
+      }
+      canvas.width = w;
+      canvas.height = h;
+
+      ctx.drawImage(img, 0, 0, w, h);
+      
+      const scaleX = w / img.width;
+      const scaleY = h / img.height;
+      const cx = cropX * scaleX;
+      const cy = cropY * scaleY;
+      const cw = cropW * scaleX;
+      const ch = cropH * scaleY;
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+      ctx.fillRect(0, 0, w, cy);
+      ctx.fillRect(0, cy + ch, w, h - (cy + ch));
+      ctx.fillRect(0, cy, cx, ch);
+      ctx.fillRect(cx + cw, cy, w - (cx + cw), ch);
+
+      ctx.strokeStyle = 'var(--primary)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 3]);
+      ctx.strokeRect(cx, cy, cw, ch);
+    };
+  }, [isCropModalOpen, selectedLayerId, cropX, cropY, cropW, cropH, layers]);
+
   return (
     <div className="app-container">
       <header className="header">
@@ -1609,6 +1737,15 @@ export default function App() {
                           prev.map((l) => (l.id === expandedLayer.id ? { ...l, ...updates } : l))
                         );
                       }}
+                      onOpenStyles={() => {
+                        if (expandedLayer.type === 'image') {
+                          setStylesActiveTab('adjustments');
+                        } else {
+                          setStylesActiveTab('fill');
+                        }
+                        setIsStylesModalOpen(true);
+                      }}
+                      onOpenCrop={handleOpenCropModal}
                     />
                   </div>
                 )}
@@ -1656,6 +1793,346 @@ export default function App() {
           />
         )}
       </main>
+
+      {/* ============================================================ */}
+      {/* Modal de Estilos de Capa (Fx - Photoshop Style) */}
+      {/* ============================================================ */}
+      {isStylesModalOpen && selectedLayerId && (() => {
+        const selectedLayer = layers.find(l => l.id === selectedLayerId);
+        if (!selectedLayer) return null;
+        return (
+          <div className="modal-overlay animate-fade-in" onClick={() => setIsStylesModalOpen(false)}>
+            <div className="layer-styles-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="layer-styles-header">
+                <h3>Estilos de Capa - {selectedLayer.name}</h3>
+                <button className="icon-btn" onClick={() => setIsStylesModalOpen(false)} aria-label="Cerrar modal">×</button>
+              </div>
+              
+              <div className="layer-styles-body">
+                <div className="layer-styles-sidebar">
+                  {selectedLayer.type === 'text' ? (
+                    <>
+                      <button
+                        type="button"
+                        className={`layer-styles-tab ${stylesActiveTab === 'fill' ? 'active' : ''}`}
+                        onClick={() => setStylesActiveTab('fill')}
+                      >
+                        🎨 Relleno
+                      </button>
+                      <button
+                        type="button"
+                        className={`layer-styles-tab ${stylesActiveTab === 'stroke' ? 'active' : ''}`}
+                        onClick={() => setStylesActiveTab('stroke')}
+                      >
+                        ✏️ Trazo
+                      </button>
+                      <button
+                        type="button"
+                        className={`layer-styles-tab ${stylesActiveTab === 'background' ? 'active' : ''}`}
+                        onClick={() => setStylesActiveTab('background')}
+                      >
+                        ⬜ Fondo
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className={`layer-styles-tab ${stylesActiveTab === 'adjustments' ? 'active' : ''}`}
+                        onClick={() => setStylesActiveTab('adjustments')}
+                      >
+                        🎛️ Ajustes
+                      </button>
+                      <button
+                        type="button"
+                        className={`layer-styles-tab ${stylesActiveTab === 'presets' ? 'active' : ''}`}
+                        onClick={() => setStylesActiveTab('presets')}
+                      >
+                        🎬 Filtros
+                      </button>
+                    </>
+                  )}
+                </div>
+                
+                <div className="layer-styles-content">
+                  {/* Controles de Texto - Relleno */}
+                  {selectedLayer.type === 'text' && stylesActiveTab === 'fill' && (
+                    <div className="form-group">
+                      <label>Color de Letra</label>
+                      <div className="color-input-wrapper" style={{ marginTop: '8px' }}>
+                        <input
+                          type="color"
+                          value={selectedLayer.color || '#ffffff'}
+                          onChange={(e) => {
+                            setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, color: e.target.value } : l));
+                          }}
+                        />
+                        <span>Relleno de texto</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Controles de Texto - Trazo */}
+                  {selectedLayer.type === 'text' && stylesActiveTab === 'stroke' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                      <div className="form-group">
+                        <label>Color de Borde</label>
+                        <div className="color-input-wrapper" style={{ marginTop: '8px' }}>
+                          <input
+                            type="color"
+                            value={selectedLayer.borderColor || '#000000'}
+                            onChange={(e) => {
+                              setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, borderColor: e.target.value } : l));
+                            }}
+                          />
+                          <span>Borde de texto</span>
+                        </div>
+                      </div>
+                      <div className="form-group">
+                        <label>Grosor del Borde</label>
+                        <div className="range-control-group" style={{ marginTop: '8px' }}>
+                          <input
+                            type="range"
+                            min="0"
+                            max="20"
+                            value={selectedLayer.borderWidth || 0}
+                            onChange={(e) => {
+                              setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, borderWidth: Number(e.target.value) } : l));
+                            }}
+                          />
+                          <span>{selectedLayer.borderWidth || 0}px</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Controles de Texto - Fondo */}
+                  {selectedLayer.type === 'text' && stylesActiveTab === 'background' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                      <div className="form-group">
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(selectedLayer.textBackgroundColor)}
+                            onChange={(e) => {
+                              setLayers(prev => prev.map(l => {
+                                if (l.id === selectedLayerId) {
+                                  if (e.target.checked) {
+                                    return { ...l, textBackgroundColor: l.textBackgroundColor || '#000000' };
+                                  } else {
+                                    const { textBackgroundColor: _, ...rest } = l;
+                                    return rest as Layer;
+                                  }
+                                }
+                                return l;
+                              }));
+                            }}
+                          />
+                          Fondo del texto activo
+                        </label>
+                      </div>
+                      {selectedLayer.textBackgroundColor && (
+                        <div className="form-group">
+                          <label>Color de Fondo</label>
+                          <div className="color-input-wrapper" style={{ marginTop: '8px' }}>
+                            <input
+                              type="color"
+                              value={selectedLayer.textBackgroundColor}
+                              onChange={(e) => {
+                                setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, textBackgroundColor: e.target.value } : l));
+                              }}
+                            />
+                            <span>Fondo</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Controles de Imagen - Ajustes */}
+                  {selectedLayer.type === 'image' && stylesActiveTab === 'adjustments' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {(
+                        [
+                          { key: 'brightness', label: 'Brillo', min: 0, max: 200, step: 1, unit: '%', defaultVal: 100 },
+                          { key: 'contrast', label: 'Contraste', min: 0, max: 200, step: 1, unit: '%', defaultVal: 100 },
+                          { key: 'saturation', label: 'Saturación', min: 0, max: 200, step: 1, unit: '%', defaultVal: 100 },
+                          { key: 'hue', label: 'Tono', min: -180, max: 180, step: 1, unit: '°', defaultVal: 0 },
+                          { key: 'invert', label: 'Invertir', min: 0, max: 100, step: 1, unit: '%', defaultVal: 0 },
+                          { key: 'sepia', label: 'Sepia', min: 0, max: 100, step: 1, unit: '%', defaultVal: 0 },
+                          { key: 'blur', label: 'Desenfoque', min: 0, max: 20, step: 0.5, unit: 'px', defaultVal: 0 },
+                        ] as const
+                      ).map(({ key, label, min, max, step, unit, defaultVal }) => {
+                        const value = selectedLayer.adjustments?.[key] ?? defaultVal;
+                        return (
+                          <div key={key} className="form-group" style={{ marginBottom: '6px' }}>
+                            <div className="range-control-group">
+                              <input
+                                type="range"
+                                min={min}
+                                max={max}
+                                step={step}
+                                value={value}
+                                onChange={(e) => {
+                                  const next = { ...(selectedLayer.adjustments ?? defaultAdjustments()), [key]: Number(e.target.value) };
+                                  setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, adjustments: next } : l));
+                                }}
+                              />
+                              <span style={{ minWidth: 36, textAlign: 'right' }}>{value}{unit}</span>
+                            </div>
+                            <label style={{ fontSize: '11px', marginTop: '2px' }}>{label}</label>
+                          </div>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ width: '100%', padding: '6px', fontSize: '11px', marginTop: '4px' }}
+                        onClick={() => {
+                          setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, adjustments: defaultAdjustments() } : l));
+                        }}
+                      >
+                        Restablecer ajustes
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Controles de Imagen - Filtros */}
+                  {selectedLayer.type === 'image' && stylesActiveTab === 'presets' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                      <label>Filtros Rápidos</label>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+                        {(
+                          [
+                            { label: 'Blanco y negro', apply: { saturation: 0 } },
+                            { label: 'Sepia', apply: { sepia: 80 } },
+                            { label: 'Frío', apply: { hue: -15, saturation: 110 } },
+                            { label: 'Cálido', apply: { hue: 15, saturation: 110 } },
+                            { label: 'Alto contraste', apply: { contrast: 140, saturation: 120 } },
+                            { label: 'Invertir', apply: { invert: 100 } },
+                          ] as const
+                        ).map((preset) => (
+                          <button
+                            key={preset.label}
+                            type="button"
+                            className="layer-preset-btn"
+                            style={{ padding: '10px' }}
+                            onClick={() => {
+                              const next = { ...defaultAdjustments(), ...preset.apply };
+                              setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, adjustments: next } : l));
+                            }}
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              <div className="layer-styles-footer">
+                <button type="button" className="btn btn-accent" onClick={() => setIsStylesModalOpen(false)}>Aceptar (FX)</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ============================================================ */}
+      {/* Modal de Recorte de Imagen (Crop Modal) */}
+      {/* ============================================================ */}
+      {isCropModalOpen && selectedLayerId && (
+        <div className="modal-overlay animate-fade-in" onClick={() => setIsCropModalOpen(false)}>
+          <div className="layer-styles-modal" style={{ maxWidth: '500px', height: 'auto' }} onClick={(e) => e.stopPropagation()}>
+            <div className="layer-styles-header">
+              <h3>Recortar Imagen</h3>
+              <button className="icon-btn" onClick={() => setIsCropModalOpen(false)}>×</button>
+            </div>
+            
+            <div className="layer-styles-content" style={{ gap: '15px' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', background: '#000', padding: '10px', borderRadius: '8px' }}>
+                <canvas id="crop-preview-canvas" style={{ maxWidth: '100%', height: 'auto', display: 'block' }} />
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className="form-group">
+                  <label>Margen Izquierdo (X)</label>
+                  <div className="range-control-group">
+                    <input
+                      type="range"
+                      min="0"
+                      max={cropImgDims.width - 20}
+                      value={cropX}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setCropX(val);
+                        if (val + cropW > cropImgDims.width) {
+                          setCropW(cropImgDims.width - val);
+                        }
+                      }}
+                    />
+                    <span>{cropX}px</span>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Margen Superior (Y)</label>
+                  <div className="range-control-group">
+                    <input
+                      type="range"
+                      min="0"
+                      max={cropImgDims.height - 20}
+                      value={cropY}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setCropY(val);
+                        if (val + cropH > cropImgDims.height) {
+                          setCropH(cropImgDims.height - val);
+                        }
+                      }}
+                    />
+                    <span>{cropY}px</span>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Ancho del Recorte</label>
+                  <div className="range-control-group">
+                    <input
+                      type="range"
+                      min="20"
+                      max={cropImgDims.width - cropX}
+                      value={cropW}
+                      onChange={(e) => setCropW(Number(e.target.value))}
+                    />
+                    <span>{cropW}px</span>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Alto del Recorte</label>
+                  <div className="range-control-group">
+                    <input
+                      type="range"
+                      min="20"
+                      max={cropImgDims.height - cropY}
+                      value={cropH}
+                      onChange={(e) => setCropH(Number(e.target.value))}
+                    />
+                    <span>{cropH}px</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="layer-styles-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setIsCropModalOpen(false)}>Cancelar</button>
+              <button type="button" className="btn btn-accent" onClick={handleApplyCrop}>Aplicar Recorte</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1742,9 +2219,11 @@ function TextLayerEditor({ layer, onChange, onCommit }: TextLayerEditorProps) {
 interface LayerPropertiesPanelProps {
   layer: Layer;
   onUpdate: (updates: Partial<Layer>) => void;
+  onOpenStyles: () => void;
+  onOpenCrop: () => void;
 }
 
-function LayerPropertiesPanel({ layer, onUpdate }: LayerPropertiesPanelProps) {
+function LayerPropertiesPanel({ layer, onUpdate, onOpenStyles, onOpenCrop }: LayerPropertiesPanelProps) {
   return (
     <div className="layer-properties animate-fade-in">
       {layer.type === 'text' && (
@@ -1788,79 +2267,16 @@ function LayerPropertiesPanel({ layer, onUpdate }: LayerPropertiesPanelProps) {
             </div>
           </div>
 
-          {/* Sección unificada de Colores y Estilos de Texto */}
+          {/* Botón Estilos de Capa (FX) */}
           <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', marginTop: '8px' }}>
-            <span style={{ display: 'block', fontWeight: 600, marginBottom: '10px', color: 'var(--primary-hover)', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.08em' }}>
-              Colores y Estilos
-            </span>
-
-            <div className="color-picker-row">
-              <div className="form-group">
-                <label>Color Letra</label>
-                <div className="color-input-wrapper">
-                  <input
-                    type="color"
-                    value={layer.color || '#ffffff'}
-                    onChange={(e) => onUpdate({ color: e.target.value })}
-                  />
-                  <span>Relleno</span>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>Color Borde</label>
-                <div className="color-input-wrapper">
-                  <input
-                    type="color"
-                    value={layer.borderColor || '#000000'}
-                    onChange={(e) => onUpdate({ borderColor: e.target.value })}
-                  />
-                  <span>Borde</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="form-group" style={{ marginTop: '10px' }}>
-              <label>Grosor del Borde</label>
-              <div className="range-control-group">
-                <input
-                  type="range"
-                  min="0"
-                  max="20"
-                  value={layer.borderWidth || 0}
-                  onChange={(e) => onUpdate({ borderWidth: Number(e.target.value) })}
-                />
-                <span>{layer.borderWidth}</span>
-              </div>
-            </div>
-
-            <div className="form-group" style={{ marginTop: '10px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input
-                  type="checkbox"
-                  checked={Boolean(layer.textBackgroundColor)}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      onUpdate({ textBackgroundColor: layer.textBackgroundColor || '#000000' });
-                    } else {
-                      const { textBackgroundColor: _, ...rest } = layer;
-                      onUpdate({ ...rest } as Partial<Layer>);
-                    }
-                  }}
-                />
-                Fondo del texto
-              </label>
-              {layer.textBackgroundColor && (
-                <div className="color-input-wrapper" style={{ marginTop: '6px' }}>
-                  <input
-                    type="color"
-                    value={layer.textBackgroundColor}
-                    onChange={(e) => onUpdate({ textBackgroundColor: e.target.value })}
-                  />
-                  <span>Color Fondo</span>
-                </div>
-              )}
-            </div>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+              onClick={onOpenStyles}
+            >
+              🎨 Estilos de Capa (Colores, Bordes...)
+            </button>
           </div>
         </div>
       )}
@@ -1883,94 +2299,24 @@ function LayerPropertiesPanel({ layer, onUpdate }: LayerPropertiesPanelProps) {
             />
           </div>
 
-          {/* Ajustes de Color de la Imagen */}
-          <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', marginTop: '8px' }}>
-            <span style={{ display: 'block', fontWeight: 600, marginBottom: '10px', color: 'var(--primary-hover)', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.08em' }}>
-              Ajustes de Color de la Imagen
-            </span>
-
-            {/* Presets al estilo Photoshop (Imagen > Ajustes) */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px', marginBottom: '12px' }}>
-              {(
-                [
-                  {
-                    label: 'Blanco y negro',
-                    apply: { saturation: 0 },
-                  },
-                  {
-                    label: 'Sepia',
-                    apply: { sepia: 80 },
-                  },
-                  {
-                    label: 'Frío',
-                    apply: { hue: -15, saturation: 110 },
-                  },
-                  {
-                    label: 'Cálido',
-                    apply: { hue: 15, saturation: 110 },
-                  },
-                  {
-                    label: 'Alto contraste',
-                    apply: { contrast: 140, saturation: 120 },
-                  },
-                  {
-                    label: 'Invertir',
-                    apply: { invert: 100 },
-                  },
-                ] as const
-              ).map((preset) => (
-                <button
-                  key={preset.label}
-                  type="button"
-                  className="layer-preset-btn"
-                  onClick={() => onUpdate({ adjustments: { ...defaultAdjustments(), ...preset.apply } })}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-
-            {(
-              [
-                { key: 'brightness', label: 'Brillo', min: 0, max: 200, step: 1, unit: '%', defaultVal: 100 },
-                { key: 'contrast', label: 'Contraste', min: 0, max: 200, step: 1, unit: '%', defaultVal: 100 },
-                { key: 'saturation', label: 'Saturación', min: 0, max: 200, step: 1, unit: '%', defaultVal: 100 },
-                { key: 'hue', label: 'Tono', min: -180, max: 180, step: 1, unit: '°', defaultVal: 0 },
-                { key: 'invert', label: 'Invertir', min: 0, max: 100, step: 1, unit: '%', defaultVal: 0 },
-                { key: 'sepia', label: 'Sepia', min: 0, max: 100, step: 1, unit: '%', defaultVal: 0 },
-                { key: 'blur', label: 'Desenfoque', min: 0, max: 20, step: 0.5, unit: 'px', defaultVal: 0 },
-              ] as const
-            ).map(({ key, label, min, max, step, unit, defaultVal }) => {
-              const value = layer.adjustments?.[key] ?? defaultVal;
-              return (
-                <div key={key} className="form-group" style={{ marginBottom: '8px' }}>
-                  <div className="range-control-group">
-                    <input
-                      type="range"
-                      min={min}
-                      max={max}
-                      step={step}
-                      value={value}
-                      onChange={(e) => {
-                        const next = { ...(layer.adjustments ?? defaultAdjustments()), [key]: Number(e.target.value) };
-                        onUpdate({ adjustments: next });
-                      }}
-                    />
-                    <span style={{ minWidth: 36, textAlign: 'right' }}>
-                      {value}{unit}
-                    </span>
-                  </div>
-                  <label style={{ fontSize: '11px', marginTop: '2px' }}>{label}</label>
-                </div>
-              );
-            })}
-
+          {/* Botones de Estilos y Recorte de Imagen */}
+          <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <button
+              type="button"
               className="btn btn-secondary"
-              style={{ width: '100%', padding: '6px', fontSize: '11px', marginTop: '4px' }}
-              onClick={() => onUpdate({ adjustments: defaultAdjustments() })}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+              onClick={onOpenStyles}
             >
-              Restablecer ajustes
+              🎨 Ajustes de Color de la Imagen
+            </button>
+            
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+              onClick={onOpenCrop}
+            >
+              ✂️ Recortar Imagen
             </button>
           </div>
         </div>
