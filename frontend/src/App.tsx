@@ -1285,8 +1285,8 @@ export default function App() {
                       const isActive = layer.id === selectedLayerId;
                       const isDragging = layer.id === draggedLayerId;
                       return (
-                        <div 
-                          key={layer.id} 
+                        <div
+                          key={layer.id}
                           className={`layer-item ${isActive ? 'active' : ''} ${isDragging ? 'dragging' : ''}`}
                           onClick={() => setSelectedLayerId(layer.id)}
                           draggable
@@ -1294,7 +1294,19 @@ export default function App() {
                           onDragOver={(e) => handleLayerDragOver(e)}
                           onDrop={(e) => handleLayerDrop(e, layer.id)}
                         >
-                          <span className="layer-info">☰ {layer.name}</span>
+                          {layer.type === 'image' && layer.imageUrl ? (
+                            <img
+                              src={layer.imageUrl}
+                              alt={layer.name}
+                              className="layer-thumbnail"
+                              draggable={false}
+                            />
+                          ) : (
+                            <div className="layer-thumbnail layer-thumbnail-text" aria-hidden>
+                              T
+                            </div>
+                          )}
+                          <span className="layer-info">{layer.name}</span>
                           <div className="layer-actions" onClick={e => e.stopPropagation()}>
                             <button className="icon-btn danger" onClick={() => handleDeleteLayer(layer.id)} title="Borrar capa" style={{ fontSize: '10px', fontWeight: 'bold' }}>
                               BORRAR

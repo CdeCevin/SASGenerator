@@ -477,7 +477,7 @@
 .layer-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
   padding: 10px 14px;
   background: #10121a;
   border: 1px solid var(--border-color);
@@ -485,6 +485,29 @@
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s ease;
+}
+
+.layer-thumbnail {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #0a0c12;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.layer-thumbnail-text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 800;
+  font-size: 18px;
+  color: var(--text-secondary);
+  background: rgba(124, 108, 246, 0.08);
+  border-color: rgba(124, 108, 246, 0.2);
+  user-select: none;
 }
 
 .layer-item:hover {
@@ -507,6 +530,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
