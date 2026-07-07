@@ -1,19 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronUp, Trash2 } from 'lucide-react';
 import './App.css';
-import { Downloader, cleanYoutubeUrl } from './features/downloader/Downloader';
-import { MaskRefinementEditor } from './components/MaskRefinementEditor';
-import { useTheme } from './context/ThemeContext';
-
-interface ImageAdjustments {
-  brightness: number;  // 0–200, 100 = normal
-  contrast: number;    // 0–200, 100 = normal
-  saturation: number;  // 0–200, 100 = normal
-  hue: number;         // -180 to 180, 0 = normal
-  blur: number;        // 0–20 px
-  invert: number;      // 0–100, 0 = normal, 100 = invertido
-  sepia: number;       // 0–100, 0 = normal, 100 = sepia completo
-}
 
 interface Layer {
   id: string;
@@ -32,98 +18,32 @@ interface Layer {
   borderWidth?: number;
   fontSize?: number;
   fontFamily?: string;
-  textBackgroundColor?: string; // Fondo opcional detrás del texto
   // Campos de Imagen
   imageUrl?: string;
-  originalImageUrl?: string;
-  adjustments?: ImageAdjustments; // Ajustes de color (mini-photoshop)
-  curvesPoints?: [number, number][]; // Puntos de curva [input, output]
 }
-
-// Ajustes "neutros" — equivalen a no aplicar ningún filtro CSS.
-const defaultAdjustments = (): ImageAdjustments => ({
-  brightness: 100,
-  contrast: 100,
-  saturation: 100,
-  hue: 0,
-  blur: 0,
-  invert: 0,
-  sepia: 0,
-});
-
-export function getCurveLUT(points: [number, number][]): Uint8Array {
-  const lut = new Uint8Array(256);
-  const sorted = [...points].sort((a, b) => a[0] - b[0]);
-  
-  for (let i = 0; i < 256; i++) {
-    let p1 = sorted[0];
-    let p2 = sorted[sorted.length - 1];
-    for (let j = 0; j < sorted.length - 1; j++) {
-      if (i >= sorted[j][0] && i <= sorted[j+1][0]) {
-        p1 = sorted[j];
-        p2 = sorted[j+1];
-        break;
-      }
-    }
-    if (p1[0] === p2[0]) {
-      lut[i] = p1[1];
-    } else {
-      const t = (i - p1[0]) / (p2[0] - p1[0]);
-      lut[i] = Math.max(0, Math.min(255, Math.round(p1[1] + t * (p2[1] - p1[1]))));
-    }
-  }
-  return lut;
-}
-
-export function getSVGTableValues(points: [number, number][]): string {
-  const lut = getCurveLUT(points);
-  const values: number[] = [];
-  for (let i = 0; i < 256; i++) {
-    values.push(lut[i] / 255);
-  }
-  return values.join(' ');
-}
-
-// Convierte los ajustes a un string CSS `filter` o a un string para `ctx.filter`.
-// Devuelve cadena vacía si todos los valores son neutros (no aplicar nada).
-const adjustmentsToFilter = (a?: ImageAdjustments): string => {
-  if (!a) return '';
-  const isDefault =
-    a.brightness === 100 &&
-    a.contrast === 100 &&
-    a.saturation === 100 &&
-    a.hue === 0 &&
-    a.blur === 0 &&
-    a.invert === 0 &&
-    a.sepia === 0;
-  if (isDefault) return '';
-  return [
-    `brightness(${a.brightness}%)`,
-    `contrast(${a.contrast}%)`,
-    `saturate(${a.saturation}%)`,
-    `hue-rotate(${a.hue}deg)`,
-    a.blur > 0 ? `blur(${a.blur}px)` : '',
-    a.invert > 0 ? `invert(${a.invert}%)` : '',
-    a.sepia > 0 ? `sepia(${a.sepia}%)` : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
-};
 
 type TabType = 'remover' | 'meme' | 'downloader';
 
 export default function App() {
-  const { theme, toggleTheme, ThemeIcon } = useTheme();
   const [activeTab, setActiveTab] = useState<TabType>('meme');
   const [apiUrl] = useState<string>(() => {
-    return localStorage.getItem('hf_space_url') || import.meta.env.VITE_API_URL || 'https://cdecevin-sasgenerator.hf.space';
+    return localStorage.getItem('hf_space_url') || import.meta.env.VITE_API_URL || '';
   });
   const [downloaderUrl] = useState<string>(() => {
-    return localStorage.getItem('hf_downloader_url') || import.meta.env.VITE_DOWNLOADER_API_URL || 'https://cdecevin-sasdownloader.hf.space';
+    return localStorage.getItem('hf_downloader_url') || import.meta.env.VITE_DOWNLOADER_API_URL || '';
   });
-  // URL del video en el formulario del descargador (controlada desde el padre
-  // para permitir que el paste global la rellene desde otra pestaña).
-  const [ytFormUrl, setYtFormUrl] = useState<string>('');
+  // --- Estados del Descargador ---
+  const [ytUrl, setYtUrl] = useState<string>('');
+  const [isFetchingFormats, setIsFetchingFormats] = useState<boolean>(false);
+  const [formats, setFormats] = useState<string[]>([]);
+  const [videoTitle, setVideoTitle] = useState<string>('');
+  const [videoDuration, setVideoDuration] = useState<number>(0);
+  const [downloadFormat, setDownloadFormat] = useState<'Video' | 'Audio'>('Video');
+  const [downloadQuality, setDownloadQuality] = useState<string>('Mejor calidad disponible');
+  const [customFileName, setCustomFileName] = useState<string>('');
+  const [isDownloading, setIsDownloading] = useState<boolean>(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [downloadStatus, setDownloadStatus] = useState<string>('');
 
   // --- Estados de Quitar Fondo ---
   const [sourceImage, setSourceImage] = useState<string | null>(null);
@@ -132,7 +52,6 @@ export default function App() {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [processingStatus, setProcessingStatus] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [showMaskEditor, setShowMaskEditor] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- Estados del Generador de Memes ---
@@ -140,55 +59,12 @@ export default function App() {
   const [canvasHeight, setCanvasHeight] = useState<number>(700);
   const [layers, setLayers] = useState<Layer[]>([]);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
-  // Capa cuyo texto se está editando en línea (textarea overlay).
-  // Cuando es null, las capas de texto se renderizan como divs (modo display).
-  const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
-  // ID de la capa cuyas propiedades están expandidas inline (botón flecha).
-  const [expandedLayerId, setExpandedLayerId] = useState<string | null>(null);
   const [canvasBackground, setCanvasBackground] = useState<{
     type: 'color' | 'image';
     value: string;
-  }>({ type: 'color', value: 'transparent' });
+  }>({ type: 'color', value: '#2b2b2b' });
   const [preset, setPreset] = useState<string>('original');
   const [layerCounter, setLayerCounter] = useState<number>(1);
-
-  // Historial para deshacer (Ctrl+Z) y arrastre de capas en la lista
-  const [history, setHistory] = useState<Layer[][]>([]);
-  const [draggedLayerId, setDraggedLayerId] = useState<string | null>(null);
-
-  // --- Estados de Modales Auxiliares (Photoshop Layer Styles & Crop) ---
-  const [isStylesModalOpen, setIsStylesModalOpen] = useState<boolean>(false);
-  const [stylesActiveTab, setStylesActiveTab] = useState<'fill' | 'stroke' | 'background' | 'adjustments' | 'curves' | 'presets'>('fill');
-  const [backupLayer, setBackupLayer] = useState<Layer | null>(null);
-  const [cropState, setCropState] = useState<{
-    layerId: string;
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-  } | null>(null);
-
-  const saveHistory = (currentLayers: Layer[]) => {
-    setHistory(prev => {
-      const newHistory = [...prev, currentLayers];
-      if (newHistory.length > 50) {
-        newHistory.shift();
-      }
-      return newHistory;
-    });
-  };
-
-  const handleUndo = () => {
-    setHistory(prev => {
-      if (prev.length === 0) return prev;
-      const newHistory = [...prev];
-      const previousState = newHistory.pop();
-      if (previousState) {
-        setLayers(previousState);
-      }
-      return newHistory;
-    });
-  };
 
   // --- Referencias y Responsividad ---
   const canvasContainerRef = useRef<HTMLDivElement>(null);
@@ -198,60 +74,19 @@ export default function App() {
   const layerFileInputRef = useRef<HTMLInputElement>(null);
 
   // Lógica de arrastre de capas
-  const [activeAction, setActiveAction] = useState<
-    | {
-        type: 'drag' | 'resize' | 'rotate';
-        handle?: 'tl' | 'tr' | 'bl' | 'br' | 't' | 'b' | 'l' | 'r';
-        layerId: string;
-        startX: number;
-        startY: number;
-        startLayerX: number;
-        startLayerY: number;
-        startLayerW: number;
-        startLayerH: number;
-        startLayerRot: number;
-      }
-    | {
-        type: 'crop';
-        handle: 'tl' | 'tr' | 'bl' | 'br' | 't' | 'b' | 'l' | 'r';
-        layerId: string;
-        startX: number;
-        startY: number;
-        startCropX: number;
-        startCropY: number;
-        startCropW: number;
-        startCropH: number;
-      }
-    | null
-  >(null);
+  const [activeAction, setActiveAction] = useState<{
+    type: 'drag' | 'resize' | 'rotate';
+    handle?: 'tl' | 'tr' | 'bl' | 'br' | 't' | 'b' | 'l' | 'r';
+    layerId: string;
+    startX: number;
+    startY: number;
+    startLayerX: number;
+    startLayerY: number;
+    startLayerW: number;
+    startLayerH: number;
+    startLayerRot: number;
+  } | null>(null);
 
-
-  // Atajos de teclado: Delete/Backspace para eliminar capa, Ctrl+Z para deshacer
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const activeTag = document.activeElement?.tagName.toLowerCase();
-      if (activeTag === 'input' || activeTag === 'textarea' || document.activeElement?.getAttribute('contenteditable') === 'true') {
-        return;
-      }
-
-      // Deshacer (Ctrl + Z)
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
-        e.preventDefault();
-        handleUndo();
-      }
-
-      // Eliminar capa (Delete o Backspace)
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedLayerId) {
-          e.preventDefault();
-          handleDeleteLayer(selectedLayerId);
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedLayerId, layers, history]);
 
   // Ajustar la escala del lienzo responsivo
   useEffect(() => {
@@ -288,126 +123,6 @@ export default function App() {
       window.removeEventListener('drop', preventDefault);
     };
   }, []);
-
-  // Cerrar el panel de propiedades expandido al hacer clic fuera o pulsar Escape.
-  // Importante: NO cerrar si el click es dentro del sidebar (la scrollbar del
-  // sidebar dispara mousedown y cerraba el panel mientras el usuario hacía
-  // scroll). Solo cerramos cuando el click es fuera del sidebar o en el canvas.
-  useEffect(() => {
-    if (!expandedLayerId) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement | null;
-      // Si el click es dentro del sidebar, no cerrar (incluye la scrollbar,
-      // los items de la lista, y el propio panel de propiedades).
-      if (target?.closest('.control-sidebar')) return;
-      // Si el click es en el botón toggle de la flecha, el onClick del botón
-      // se encarga de togglear.
-      if (target?.closest('.layer-menu-toggle')) return;
-      setExpandedLayerId(null);
-    };
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setExpandedLayerId(null);
-    };
-    window.addEventListener('mousedown', handleClickOutside);
-    window.addEventListener('keydown', handleKey);
-    return () => {
-      window.removeEventListener('mousedown', handleClickOutside);
-      window.removeEventListener('keydown', handleKey);
-    };
-  }, [expandedLayerId]);
-
-  // --- PEGAR DESDE EL PORTAPAPELES (global) ---
-  // - Imagen: en Quitar Fondo → fuente; en Meme → capa de imagen
-  // - Texto: en Meme (con capa de texto seleccionada) → reemplaza; si no → nueva capa
-  // - URL de YouTube: cualquier pestaña → salta al Descargador con la URL
-  useEffect(() => {
-    const isYoutubeUrl = (text: string): boolean => {
-      const t = text.trim();
-      return /(?:youtube\.com|youtu\.be)/i.test(t);
-    };
-
-    const handlePaste = (e: ClipboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      const tag = target?.tagName?.toLowerCase();
-      const isInputField =
-        tag === 'input' || tag === 'textarea' || target?.isContentEditable === true;
-
-      const cd = e.clipboardData;
-      if (!cd) return;
-
-      // 1) Imagen del portapapeles
-      if (cd.files && cd.files.length > 0) {
-        const file = cd.files[0];
-        if (file.type.startsWith('image/')) {
-          e.preventDefault();
-          if (activeTab === 'remover') {
-            loadSourceImage(file);
-          } else if (activeTab === 'meme') {
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-              const dataUrl = ev.target?.result as string;
-              const img = new Image();
-              img.src = dataUrl;
-              img.onload = () => {
-                const naturalW = img.naturalWidth || img.width;
-                const naturalH = img.naturalHeight || img.height;
-                const hasImageLayers = layers.some(l => l.type === 'image');
-                if (!hasImageLayers) {
-                  setCanvasWidth(naturalW);
-                  setCanvasHeight(naturalH);
-                  setPreset('custom');
-                }
-                addImageLayer(dataUrl, 'Imagen pegada', undefined, naturalW, naturalH);
-              };
-            };
-            reader.readAsDataURL(file);
-          }
-          return;
-        }
-      }
-
-      // 2) Texto del portapapeles
-      const text = cd.getData('text/plain');
-      if (!text) return;
-
-      // Las URLs de YouTube SIEMPRE se interceptan, incluso en inputs.
-      if (isYoutubeUrl(text)) {
-        e.preventDefault();
-        setActiveTab('downloader');
-        setYtFormUrl(cleanYoutubeUrl(text.trim()));
-        return;
-      }
-
-      // Otro texto: solo actuar si NO está en un input/textarea.
-      if (isInputField) return;
-
-      if (activeTab === 'meme') {
-        e.preventDefault();
-        if (selectedLayerId) {
-          const layer = layers.find((l) => l.id === selectedLayerId);
-          if (layer && layer.type === 'text') {
-            updateSelectedLayer({ text });
-            return;
-          }
-        }
-        addTextLayer(text);
-      }
-    };
-
-    window.addEventListener('paste', handlePaste);
-    return () => window.removeEventListener('paste', handlePaste);
-    // loadSourceImage y addImageLayer/addTextLayer/updateSelectedLayer se
-    // referencian dentro del handler; al recrear el listener en cada cambio
-    // nos aseguramos de usar las versiones más recientes del estado.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    activeTab,
-    selectedLayerId,
-    layers,
-    layerCounter,
-    canvasWidth,
-    canvasHeight,
-  ]);
 
   // Manejar el cambio de presets de tamaño del lienzo
   const applyPreset = (presetName: string) => {
@@ -517,7 +232,6 @@ export default function App() {
 
   const handleSendToCanvas = () => {
     if (!resultImage) return;
-    saveHistory(layers);
     
     // Crear una nueva capa de imagen
     const newLayer: Layer = {
@@ -531,7 +245,6 @@ export default function App() {
       rotation: 0,
       zIndex: layers.length + 1,
       imageUrl: resultImage,
-      originalImageUrl: resultImage,
     };
 
     setLayers([newLayer, ...layers]);
@@ -553,13 +266,112 @@ export default function App() {
   // -------------------------------------------------------------
   // --- LÓGICA DEL DESCARGADOR (API) ---
   // -------------------------------------------------------------
-  // Moved to src/features/downloader/Downloader.tsx (Fase 1)
+  const handleFetchFormats = async () => {
+    if (!ytUrl.trim()) {
+      setDownloadError('Por favor, ingresa una URL válida.');
+      return;
+    }
+
+    if (!downloaderUrl) {
+      setDownloadError('Configura primero la URL del servidor de descargas en Ajustes.');
+      return;
+    }
+
+    setIsFetchingFormats(true);
+    setDownloadError(null);
+    setFormats([]);
+    setVideoTitle('');
+    setVideoDuration(0);
+
+    try {
+      const cleanApiUrl = downloaderUrl.replace(/\/$/, '');
+      const response = await fetch(`${cleanApiUrl}/fetch-formats?url=${encodeURIComponent(ytUrl)}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Error al conectar con el servidor de descargas.');
+      }
+
+      const data = await response.json();
+      setVideoTitle(data.title || 'Video');
+      setVideoDuration(data.duration || 0);
+      setFormats(data.formats || ['Mejor calidad disponible']);
+      setDownloadQuality('Mejor calidad disponible');
+    } catch (err: any) {
+      setDownloadError(err.message || 'Error al buscar formatos en el servidor.');
+    } finally {
+      setIsFetchingFormats(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!ytUrl.trim()) return;
+
+    if (!downloaderUrl) {
+      setDownloadError('Configura la URL del servidor de descargas en Ajustes.');
+      return;
+    }
+
+    setIsDownloading(true);
+    setDownloadError(null);
+    setDownloadStatus('Conectando con el servidor de descargas...');
+
+    try {
+      const cleanApiUrl = downloaderUrl.replace(/\/$/, '');
+      const downloadEndpoint = `${cleanApiUrl}/download?url=${encodeURIComponent(ytUrl)}` + 
+        `&format_type=${downloadFormat}` + 
+        `&quality=${encodeURIComponent(downloadQuality)}` + 
+        `&custom_name=${encodeURIComponent(customFileName)}`;
+
+      setDownloadStatus('Descargando y convirtiendo en el servidor (esto puede demorar un par de minutos)...');
+      
+      const response = await fetch(downloadEndpoint);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'El servidor falló durante la descarga.');
+      }
+
+      setDownloadStatus('Recibiendo archivo en tu navegador...');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      
+      const disposition = response.headers.get('content-disposition');
+      let filename = customFileName.trim() ? customFileName.trim() : 'descarga';
+      const extension = downloadFormat === 'Video' ? '.mp4' : '.mp3';
+      
+      if (disposition && disposition.indexOf('filename=') !== -1) {
+        const matches = /filename="?([^";]+)"?/g.exec(disposition);
+        if (matches != null && matches[1]) {
+          filename = matches[1];
+        } else {
+          filename = filename + extension;
+        }
+      } else {
+        filename = filename + extension;
+      }
+
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setDownloadError(err.message || 'Error al procesar la descarga.');
+    } finally {
+      setIsDownloading(false);
+      setDownloadStatus('');
+    }
+  };
 
   // -------------------------------------------------------------
   // --- LÓGICA DEL GENERADOR DE MEMES (Canvas) ---
   // -------------------------------------------------------------
-  const addTextLayer = (initialText?: string) => {
-    saveHistory(layers);
+  const handleAddText = () => {
     const newLayer: Layer = {
       id: `txt_${layerCounter}`,
       type: 'text',
@@ -570,7 +382,7 @@ export default function App() {
       height: 100,
       rotation: 0,
       zIndex: layers.length + 1,
-      text: initialText ?? 'DOBLE CLIC AQUÍ',
+      text: 'DOBLE CLIC AQUÍ',
       color: '#ffffff',
       borderColor: '#000000',
       borderWidth: 2,
@@ -581,40 +393,6 @@ export default function App() {
     setLayers([newLayer, ...layers]);
     setLayerCounter(prev => prev + 1);
     setSelectedLayerId(newLayer.id);
-    // Entrar en modo edición inmediatamente para que el usuario pueda tipar.
-    setEditingLayerId(newLayer.id);
-  };
-
-  const handleAddText = () => {
-    addTextLayer();
-  };
-
-  const addImageLayer = (
-    imageUrl: string,
-    name: string,
-    position?: { x: number; y: number },
-    imgW?: number,
-    imgH?: number
-  ) => {
-    saveHistory(layers);
-    const w = imgW ?? 400;
-    const h = imgH ?? 400;
-    const newLayer: Layer = {
-      id: `img_${layerCounter}`,
-      type: 'image',
-      name,
-      x: position?.x ?? Math.round(canvasWidth / 2 - w / 2),
-      y: position?.y ?? Math.round(canvasHeight / 2 - h / 2),
-      width: w,
-      height: h,
-      rotation: 0,
-      zIndex: layers.length + 1,
-      imageUrl,
-      originalImageUrl: imageUrl,
-    };
-    setLayers([newLayer, ...layers]);
-    setLayerCounter(prev => prev + 1);
-    setSelectedLayerId(newLayer.id);
   };
 
   const handleAddImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -622,90 +400,24 @@ export default function App() {
     if (files && files[0]) {
       const reader = new FileReader();
       reader.onload = (event) => {
-        const dataUrl = event.target?.result as string;
-        const img = new Image();
-        img.src = dataUrl;
-        img.onload = () => {
-          const naturalW = img.naturalWidth || img.width;
-          const naturalH = img.naturalHeight || img.height;
-          // Si el lienzo está vacío (sin capas de imagen), ajustar el canvas
-          const hasImageLayers = layers.some(l => l.type === 'image');
-          if (!hasImageLayers) {
-            setCanvasWidth(naturalW);
-            setCanvasHeight(naturalH);
-            setPreset('custom');
-          }
-          addImageLayer(dataUrl, files[0].name, undefined, naturalW, naturalH);
+        const newLayer: Layer = {
+          id: `img_${layerCounter}`,
+          type: 'image',
+          name: files[0].name,
+          x: canvasWidth / 2 - 200,
+          y: canvasHeight / 2 - 200,
+          width: 400,
+          height: 400,
+          rotation: 0,
+          zIndex: layers.length + 1,
+          imageUrl: event.target?.result as string,
         };
+        setLayers([newLayer, ...layers]);
+        setLayerCounter(prev => prev + 1);
+        setSelectedLayerId(newLayer.id);
       };
       reader.readAsDataURL(files[0]);
     }
-  };
-
-  // --- Manipulación de capas (usada por el menú de 3 puntos) ---
-  const duplicateLayer = (id: string) => {
-    const layer = layers.find((l) => l.id === id);
-    if (!layer) return;
-    saveHistory(layers);
-    const copy: Layer = {
-      ...layer,
-      id: `${layer.type === 'text' ? 'txt' : 'img'}_${layerCounter}`,
-      name: layer.name + ' (copia)',
-      x: layer.x + 20,
-      y: layer.y + 20,
-      zIndex: layers.length + 1,
-    };
-    setLayers([copy, ...layers]);
-    setLayerCounter((prev) => prev + 1);
-    setSelectedLayerId(copy.id);
-  };
-
-  const bringToFront = (id: string) => {
-    const maxZ = Math.max(...layers.map((l) => l.zIndex), 0);
-    saveHistory(layers);
-    setLayers((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, zIndex: maxZ + 1 } : l))
-    );
-  };
-
-  const sendToBack = (id: string) => {
-    const minZ = Math.min(...layers.map((l) => l.zIndex), 0);
-    saveHistory(layers);
-    setLayers((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, zIndex: minZ - 1 } : l))
-    );
-  };
-
-  const moveLayerUp = (id: string) => {
-    const sorted = [...layers].sort((a, b) => a.zIndex - b.zIndex);
-    const idx = sorted.findIndex((l) => l.id === id);
-    if (idx === -1 || idx === sorted.length - 1) return;
-    saveHistory(layers);
-    const a = sorted[idx];
-    const b = sorted[idx + 1];
-    setLayers((prev) =>
-      prev.map((l) => {
-        if (l.id === a.id) return { ...l, zIndex: b.zIndex };
-        if (l.id === b.id) return { ...l, zIndex: a.zIndex };
-        return l;
-      })
-    );
-  };
-
-  const moveLayerDown = (id: string) => {
-    const sorted = [...layers].sort((a, b) => a.zIndex - b.zIndex);
-    const idx = sorted.findIndex((l) => l.id === id);
-    if (idx <= 0) return;
-    saveHistory(layers);
-    const a = sorted[idx];
-    const b = sorted[idx - 1];
-    setLayers((prev) =>
-      prev.map((l) => {
-        if (l.id === a.id) return { ...l, zIndex: b.zIndex };
-        if (l.id === b.id) return { ...l, zIndex: a.zIndex };
-        return l;
-      })
-    );
   };
 
   const handleCanvasDragOver = (e: React.DragEvent) => {
@@ -731,7 +443,6 @@ export default function App() {
 
       const reader = new FileReader();
       reader.onload = (event) => {
-        saveHistory(layers);
         const newLayer: Layer = {
           id: `img_${layerCounter}`,
           type: 'image',
@@ -756,48 +467,31 @@ export default function App() {
     const targetId = idToDelete || selectedLayerId;
     if (!targetId) return;
     
-    saveHistory(layers);
     setLayers(prev => prev.filter(layer => layer.id !== targetId));
     if (selectedLayerId === targetId) {
       setSelectedLayerId(null);
     }
   };
 
-  const handleLayerDragStart = (e: React.DragEvent, id: string) => {
-    e.dataTransfer.setData('text/plain', id);
-    setDraggedLayerId(id);
-  };
-
-  const handleLayerDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
-
-  const handleLayerDrop = (e: React.DragEvent, targetId: string) => {
-    e.preventDefault();
-    const sourceId = e.dataTransfer.getData('text/plain') || draggedLayerId;
-    if (!sourceId || sourceId === targetId) return;
-
-    saveHistory(layers);
-
+  const handleZIndexChange = (direction: 'up' | 'down', id: string) => {
     setLayers(prev => {
-      const sorted = [...prev].sort((a, b) => b.zIndex - a.zIndex); // Mayor zIndex primero (orden de la lista)
-      const sourceIndex = sorted.findIndex(l => l.id === sourceId);
-      const targetIndex = sorted.findIndex(l => l.id === targetId);
-      if (sourceIndex === -1 || targetIndex === -1) return prev;
+      const sorted = [...prev].sort((a, b) => b.zIndex - a.zIndex); // ZIndex descendente (capa de arriba primero)
+      const index = sorted.findIndex(l => l.id === id);
+      if (index === -1) return prev;
 
-      // Mover elemento en el array
-      const [removed] = sorted.splice(sourceIndex, 1);
-      sorted.splice(targetIndex, 0, removed);
-
-      // Reasignar zIndex descendente: el primero de la lista (index 0) tiene el mayor zIndex
-      const total = sorted.length;
-      return sorted.map((layer, idx) => ({
-        ...layer,
-        zIndex: total - idx
-      }));
+      if (direction === 'up' && index > 0) {
+        // Intercambiar Z-Index con el de arriba en la lista (que se dibuja después, es decir, tiene mayor ZIndex)
+        const temp = sorted[index].zIndex;
+        sorted[index].zIndex = sorted[index - 1].zIndex;
+        sorted[index - 1].zIndex = temp;
+      } else if (direction === 'down' && index < sorted.length - 1) {
+        // Intercambiar Z-Index con el de abajo en la lista
+        const temp = sorted[index].zIndex;
+        sorted[index].zIndex = sorted[index + 1].zIndex;
+        sorted[index + 1].zIndex = temp;
+      }
+      return sorted;
     });
-
-    setDraggedLayerId(null);
   };
 
   const handleBgColorChange = (color: string) => {
@@ -809,31 +503,21 @@ export default function App() {
     if (files && files[0]) {
       const reader = new FileReader();
       reader.onload = (event) => {
-        const dataUrl = event.target?.result as string;
         setCanvasBackground({
           type: 'image',
-          value: dataUrl,
+          value: event.target?.result as string,
         });
-
-        const img = new Image();
-        img.src = dataUrl;
-        img.onload = () => {
-          setCanvasWidth(img.naturalWidth || img.width);
-          setCanvasHeight(img.naturalHeight || img.height);
-          setPreset('custom');
-        };
       };
       reader.readAsDataURL(files[0]);
     }
   };
 
   const handleClearBg = () => {
-    setCanvasBackground({ type: 'color', value: 'transparent' });
+    setCanvasBackground({ type: 'color', value: '#2b2b2b' });
   };
 
   const updateSelectedLayer = (updates: Partial<Layer>) => {
     if (!selectedLayerId) return;
-    saveHistory(layers);
     setLayers(prev => prev.map(layer => {
       if (layer.id === selectedLayerId) {
         const updated = { ...layer, ...updates };
@@ -850,7 +534,6 @@ export default function App() {
   };
 
   const selectedLayer = layers.find(l => l.id === selectedLayerId);
-  const expandedLayer = layers.find(l => l.id === expandedLayerId);
 
   // -------------------------------------------------------------
   // --- MATEMÁTICAS DE ARRASTRE, REDIMENSIONADO Y ROTACIÓN ---
@@ -860,7 +543,6 @@ export default function App() {
     e.stopPropagation();
     
     setSelectedLayerId(layerId);
-    saveHistory(layers);
 
     const layer = layers.find(l => l.id === layerId);
     if (!layer) return;
@@ -939,68 +621,6 @@ export default function App() {
           return l;
         }));
       } 
-      else if (activeAction.type === 'crop') {
-        const dx = (e.clientX - activeAction.startX) / canvasScale;
-        const dy = (e.clientY - activeAction.startY) / canvasScale;
-
-        // Rotar el desplazamiento delta de vuelta al sistema de coordenadas de la capa
-        const rad = (layer.rotation * Math.PI) / 180;
-        const cos = Math.cos(rad);
-        const sin = Math.sin(rad);
-        
-        // Coordenadas locales de desplazamiento dx, dy
-        const localDx = dx * cos + dy * sin;
-        const localDy = -dx * sin + dy * cos;
-
-        let newX = activeAction.startCropX ?? 0;
-        let newY = activeAction.startCropY ?? 0;
-        let newW = activeAction.startCropW ?? layer.width;
-        let newH = activeAction.startCropH ?? layer.height;
-
-        const handle = activeAction.handle;
-        if (handle === 'tl') {
-          newX = Math.max(0, Math.min((activeAction.startCropX ?? 0) + localDx, (activeAction.startCropX ?? 0) + (activeAction.startCropW ?? layer.width) - 20));
-          newW = (activeAction.startCropW ?? layer.width) - (newX - (activeAction.startCropX ?? 0));
-          newY = Math.max(0, Math.min((activeAction.startCropY ?? 0) + localDy, (activeAction.startCropY ?? 0) + (activeAction.startCropH ?? layer.height) - 20));
-          newH = (activeAction.startCropH ?? layer.height) - (newY - (activeAction.startCropY ?? 0));
-        }
-        else if (handle === 'tr') {
-          newW = Math.max(20, Math.min((activeAction.startCropW ?? layer.width) + localDx, layer.width - (activeAction.startCropX ?? 0)));
-          newY = Math.max(0, Math.min((activeAction.startCropY ?? 0) + localDy, (activeAction.startCropY ?? 0) + (activeAction.startCropH ?? layer.height) - 20));
-          newH = (activeAction.startCropH ?? layer.height) - (newY - (activeAction.startCropY ?? 0));
-        }
-        else if (handle === 'bl') {
-          newX = Math.max(0, Math.min((activeAction.startCropX ?? 0) + localDx, (activeAction.startCropX ?? 0) + (activeAction.startCropW ?? layer.width) - 20));
-          newW = (activeAction.startCropW ?? layer.width) - (newX - (activeAction.startCropX ?? 0));
-          newH = Math.max(20, Math.min((activeAction.startCropH ?? layer.height) + localDy, layer.height - (activeAction.startCropY ?? 0)));
-        }
-        else if (handle === 'br') {
-          newW = Math.max(20, Math.min((activeAction.startCropW ?? layer.width) + localDx, layer.width - (activeAction.startCropX ?? 0)));
-          newH = Math.max(20, Math.min((activeAction.startCropH ?? layer.height) + localDy, layer.height - (activeAction.startCropY ?? 0)));
-        }
-        else if (handle === 't') {
-          newY = Math.max(0, Math.min((activeAction.startCropY ?? 0) + localDy, (activeAction.startCropY ?? 0) + (activeAction.startCropH ?? layer.height) - 20));
-          newH = (activeAction.startCropH ?? layer.height) - (newY - (activeAction.startCropY ?? 0));
-        }
-        else if (handle === 'b') {
-          newH = Math.max(20, Math.min((activeAction.startCropH ?? layer.height) + localDy, layer.height - (activeAction.startCropY ?? 0)));
-        }
-        else if (handle === 'l') {
-          newX = Math.max(0, Math.min((activeAction.startCropX ?? 0) + localDx, (activeAction.startCropX ?? 0) + (activeAction.startCropW ?? layer.width) - 20));
-          newW = (activeAction.startCropW ?? layer.width) - (newX - (activeAction.startCropX ?? 0));
-        }
-        else if (handle === 'r') {
-          newW = Math.max(20, Math.min((activeAction.startCropW ?? layer.width) + localDx, layer.width - (activeAction.startCropX ?? 0)));
-        }
-
-        setCropState(prev => prev ? {
-          ...prev,
-          x: Math.round(newX),
-          y: Math.round(newY),
-          w: Math.round(newW),
-          h: Math.round(newH)
-        } : null);
-      }
       else if (activeAction.type === 'rotate') {
         // Centro del lienzo
         const cx = layer.x + layer.width / 2;
@@ -1131,15 +751,8 @@ export default function App() {
     };
   }, [activeAction, canvasScale, canvasWidth, canvasHeight, layers]);
 
-  // Deseleccionar al hacer clic fuera del lienzo (evitando clics en la barra de desplazamiento)
-  const handleCanvasContainerMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const isVerticalScrollbarClick = e.clientX >= rect.left + e.currentTarget.clientWidth;
-    const isHorizontalScrollbarClick = e.clientY >= rect.top + e.currentTarget.clientHeight;
-    
-    if (isVerticalScrollbarClick || isHorizontalScrollbarClick) {
-      return;
-    }
+  // Deseleccionar al hacer clic fuera del lienzo
+  const handleCanvasContainerMouseDown = () => {
     setSelectedLayerId(null);
   };
 
@@ -1156,126 +769,84 @@ export default function App() {
     });
   };
 
-  // Renderiza el meme a un canvas 2D. Compartido por exportar y copiar.
-  const renderMemeToCanvas = async (): Promise<HTMLCanvasElement> => {
-    const canvas = document.createElement('canvas');
-    canvas.width = canvasWidth;
-    canvas.height = canvasHeight;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('No se pudo obtener el contexto 2D del Canvas');
-
-    // 1. Dibujar el fondo
-    if (canvasBackground.type === 'color') {
-      if (canvasBackground.value !== 'transparent') {
-        ctx.fillStyle = canvasBackground.value;
-        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-      } else {
-        ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-      }
-    } else if (canvasBackground.type === 'image' && canvasBackground.value) {
-      try {
-        const bgImg = await loadImageAsync(canvasBackground.value);
-        ctx.drawImage(bgImg, 0, 0, canvasWidth, canvasHeight);
-      } catch (e) {
-        console.error("Error al cargar la imagen de fondo", e);
-        ctx.fillStyle = '#2b2b2b';
-        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-      }
-    }
-
-    // 2. Dibujar las capas en orden inverso de Z-Index (ZIndex ascendente)
-    const sortedLayers = [...layers].sort((a, b) => a.zIndex - b.zIndex);
-
-    for (const layer of sortedLayers) {
-      ctx.save();
-
-      // Mover el origen de coordenadas al centro de la capa
-      const cx = layer.x + layer.width / 2;
-      const cy = layer.y + layer.height / 2;
-      ctx.translate(cx, cy);
-
-      // Rotar
-      ctx.rotate((layer.rotation * Math.PI) / 180);
-
-      if (layer.type === 'image' && layer.imageUrl) {
-        try {
-          const img = await loadImageAsync(layer.imageUrl);
-          if (layer.curvesPoints && layer.curvesPoints.length > 0) {
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = layer.width;
-            tempCanvas.height = layer.height;
-            const tempCtx = tempCanvas.getContext('2d');
-            if (tempCtx) {
-              if (layer.adjustments) {
-                tempCtx.filter = adjustmentsToFilter(layer.adjustments) || 'none';
-              }
-              tempCtx.drawImage(img, 0, 0, layer.width, layer.height);
-              tempCtx.filter = 'none';
-              
-              const imgData = tempCtx.getImageData(0, 0, layer.width, layer.height);
-              const data = imgData.data;
-              const lut = getCurveLUT(layer.curvesPoints);
-              for (let i = 0; i < data.length; i += 4) {
-                data[i] = lut[data[i]];
-                data[i+1] = lut[data[i+1]];
-                data[i+2] = lut[data[i+2]];
-              }
-              tempCtx.putImageData(imgData, 0, 0);
-              ctx.drawImage(tempCanvas, -layer.width / 2, -layer.height / 2, layer.width, layer.height);
-            } else {
-              ctx.filter = adjustmentsToFilter(layer.adjustments) || 'none';
-              ctx.drawImage(img, -layer.width / 2, -layer.height / 2, layer.width, layer.height);
-              ctx.filter = 'none';
-            }
-          } else {
-            ctx.filter = adjustmentsToFilter(layer.adjustments) || 'none';
-            ctx.drawImage(img, -layer.width / 2, -layer.height / 2, layer.width, layer.height);
-            ctx.filter = 'none';
-          }
-        } catch (e) {
-          console.error("Error al cargar la imagen de la capa", layer.id, e);
-        }
-      }
-      else if (layer.type === 'text' && layer.text) {
-        ctx.font = `bold ${layer.fontSize || 40}px ${layer.fontFamily || 'Impact'}`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-
-        const lines = layer.text.split('\n');
-        const fontSize = layer.fontSize || 40;
-        const lineHeight = fontSize * 1.1;
-        const startY = -((lines.length - 1) * lineHeight) / 2;
-
-        lines.forEach((line, index) => {
-          const y = startY + index * lineHeight;
-
-          // Dibujar el borde del clon trasero
-          if (layer.borderWidth && layer.borderWidth > 0) {
-            ctx.strokeStyle = layer.borderColor || '#000000';
-            ctx.lineWidth = layer.borderWidth * 2; // se multiplica por 2 ya que strokeText se expande hacia adentro y afuera
-            ctx.lineJoin = 'round';
-            ctx.lineCap = 'round';
-            ctx.strokeText(line, 0, y);
-          }
-
-          // Dibujar el frente
-          ctx.fillStyle = layer.color || '#ffffff';
-          ctx.fillText(line, 0, y);
-        });
-      }
-
-      ctx.restore();
-    }
-
-    return canvas;
-  };
-
   const handleExportMeme = async () => {
     setIsProcessing(true);
     setProcessingStatus('Generando imagen de alta resolución...');
 
     try {
-      const canvas = await renderMemeToCanvas();
+      const canvas = document.createElement('canvas');
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('No se pudo obtener el contexto 2D del Canvas');
+
+      // 1. Dibujar el fondo
+      if (canvasBackground.type === 'color') {
+        ctx.fillStyle = canvasBackground.value;
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+      } else if (canvasBackground.type === 'image' && canvasBackground.value) {
+        try {
+          const bgImg = await loadImageAsync(canvasBackground.value);
+          ctx.drawImage(bgImg, 0, 0, canvasWidth, canvasHeight);
+        } catch (e) {
+          console.error("Error al cargar la imagen de fondo", e);
+          ctx.fillStyle = '#2b2b2b';
+          ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        }
+      }
+
+      // 2. Dibujar las capas en orden inverso de Z-Index (ZIndex ascendente)
+      const sortedLayers = [...layers].sort((a, b) => a.zIndex - b.zIndex);
+
+      for (const layer of sortedLayers) {
+        ctx.save();
+        
+        // Mover el origen de coordenadas al centro de la capa
+        const cx = layer.x + layer.width / 2;
+        const cy = layer.y + layer.height / 2;
+        ctx.translate(cx, cy);
+        
+        // Rotar
+        ctx.rotate((layer.rotation * Math.PI) / 180);
+
+        if (layer.type === 'image' && layer.imageUrl) {
+          try {
+            const img = await loadImageAsync(layer.imageUrl);
+            ctx.drawImage(img, -layer.width / 2, -layer.height / 2, layer.width, layer.height);
+          } catch (e) {
+            console.error("Error al cargar la imagen de la capa", layer.id, e);
+          }
+        } 
+        else if (layer.type === 'text' && layer.text) {
+          ctx.font = `bold ${layer.fontSize || 40}px ${layer.fontFamily || 'Impact'}`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+
+          const lines = layer.text.split('\n');
+          const fontSize = layer.fontSize || 40;
+          const lineHeight = fontSize * 1.1;
+          const startY = -((lines.length - 1) * lineHeight) / 2;
+
+          lines.forEach((line, index) => {
+            const y = startY + index * lineHeight;
+
+            // Dibujar el borde del clon trasero
+            if (layer.borderWidth && layer.borderWidth > 0) {
+              ctx.strokeStyle = layer.borderColor || '#000000';
+              ctx.lineWidth = layer.borderWidth * 2; // se multiplica por 2 ya que strokeText se expande hacia adentro y afuera
+              ctx.lineJoin = 'round';
+              ctx.lineCap = 'round';
+              ctx.strokeText(line, 0, y);
+            }
+
+            // Dibujar el frente
+            ctx.fillStyle = layer.color || '#ffffff';
+            ctx.fillText(line, 0, y);
+          });
+        }
+
+        ctx.restore();
+      }
 
       // 3. Descargar
       const dataUrl = canvas.toDataURL('image/png');
@@ -1291,279 +862,50 @@ export default function App() {
     }
   };
 
-  // Estado del botón "Copiar": idle | copying | success | error
-  const [copyStatus, setCopyStatus] = useState<'idle' | 'copying' | 'success' | 'error'>('idle');
-
-  const handleCopyMemeToClipboard = async () => {
-    if (copyStatus === 'copying') return;
-    if (typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) {
-      setCopyStatus('error');
-      window.setTimeout(() => setCopyStatus('idle'), 2500);
-      return;
-    }
-    setCopyStatus('copying');
-    try {
-      const canvas = await renderMemeToCanvas();
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob(
-          (b) => (b ? resolve(b) : reject(new Error('No se pudo generar la imagen para el portapapeles.'))),
-          'image/png'
-        );
-      });
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-      setCopyStatus('success');
-    } catch (err) {
-      console.error(err);
-      setCopyStatus('error');
-    } finally {
-      window.setTimeout(() => setCopyStatus('idle'), 2000);
-    }
-  };
-
   const handleResetCanvas = () => {
     if (window.confirm('¿Estás seguro de que quieres borrar todo el lienzo?')) {
-      saveHistory(layers);
       setLayers([]);
-      setCanvasBackground({ type: 'color', value: 'transparent' });
+      setCanvasBackground({ type: 'color', value: '#2b2b2b' });
       setSelectedLayerId(null);
     }
   };
-
-  const [selectedPointIndex, setSelectedPointIndex] = useState<number | null>(null);
-
-  const handleCurvesSVGMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
-    const svg = e.currentTarget;
-    const rect = svg.getBoundingClientRect();
-    const x = Math.max(0, Math.min(255, Math.round(((e.clientX - rect.left) / rect.width) * 255)));
-    const y = Math.max(0, Math.min(255, Math.round((1 - (e.clientY - rect.top) / rect.height) * 255)));
-
-    const selectedLayer = layers.find(l => l.id === selectedLayerId);
-    if (!selectedLayer) return;
-    const points = selectedLayer.curvesPoints || [[0, 0], [255, 255]];
-
-    const threshold = 15;
-    let foundIdx = -1;
-    for (let i = 0; i < points.length; i++) {
-      const dist = Math.hypot(points[i][0] - x, points[i][1] - y);
-      if (dist < threshold) {
-        foundIdx = i;
-        break;
-      }
-    }
-
-    if (foundIdx !== -1) {
-      setSelectedPointIndex(foundIdx);
-    } else {
-      let insertIdx = 0;
-      for (let i = 0; i < points.length; i++) {
-        if (x > points[i][0]) {
-          insertIdx = i + 1;
-        }
-      }
-      const newPoints = [...points];
-      newPoints.splice(insertIdx, 0, [x, y]);
-      setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, curvesPoints: newPoints } : l));
-      setSelectedPointIndex(insertIdx);
-    }
-  };
-
-  const handleCurvesSVGMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (selectedPointIndex === null) return;
-    const svg = e.currentTarget;
-    const rect = svg.getBoundingClientRect();
-    const x = Math.max(0, Math.min(255, Math.round(((e.clientX - rect.left) / rect.width) * 255)));
-    const y = Math.max(0, Math.min(255, Math.round((1 - (e.clientY - rect.top) / rect.height) * 255)));
-
-    const selectedLayer = layers.find(l => l.id === selectedLayerId);
-    if (!selectedLayer) return;
-    const points = [...(selectedLayer.curvesPoints || [[0, 0], [255, 255]])];
-
-    const currentPoint = points[selectedPointIndex];
-    if (!currentPoint) return;
-
-    if (selectedPointIndex === 0) {
-      points[selectedPointIndex] = [0, y];
-    } else if (selectedPointIndex === points.length - 1) {
-      points[selectedPointIndex] = [255, y];
-    } else {
-      const minX = points[selectedPointIndex - 1][0] + 5;
-      const maxX = points[selectedPointIndex + 1][0] - 5;
-      const boundedX = Math.max(minX, Math.min(x, maxX));
-      points[selectedPointIndex] = [boundedX, y];
-    }
-
-    setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, curvesPoints: points } : l));
-  };
-
-  const handleCurvesSVGMouseUp = () => {
-    setSelectedPointIndex(null);
-  };
-
-  const handleCurvesDoubleClickPoint = (index: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const selectedLayer = layers.find(l => l.id === selectedLayerId);
-    if (!selectedLayer) return;
-    const points = selectedLayer.curvesPoints || [[0, 0], [255, 255]];
-    if (index === 0 || index === points.length - 1) return;
-
-    const newPoints = points.filter((_, idx) => idx !== index);
-    setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, curvesPoints: newPoints } : l));
-    setSelectedPointIndex(null);
-  };
-
-  const handleOpenCrop = () => {
-    const selectedLayer = layers.find(l => l.id === selectedLayerId);
-    if (!selectedLayer || selectedLayer.type !== 'image') return;
-    setCropState({
-      layerId: selectedLayer.id,
-      x: 0,
-      y: 0,
-      w: selectedLayer.width,
-      h: selectedLayer.height,
-    });
-  };
-
-  const handleCancelCrop = () => {
-    setCropState(null);
-  };
-
-  const handleApplyCrop = () => {
-    if (!cropState) return;
-    const selectedLayer = layers.find(l => l.id === cropState.layerId);
-    if (!selectedLayer || selectedLayer.type !== 'image') return;
-
-    const img = new Image();
-    img.src = selectedLayer.imageUrl || '';
-    img.onload = () => {
-      // Coordenadas originales de la imagen (de escala real)
-      const scaleX = img.width / selectedLayer.width;
-      const scaleY = img.height / selectedLayer.height;
-      
-      const origX = cropState.x * scaleX;
-      const origY = cropState.y * scaleY;
-      const origW = cropState.w * scaleX;
-      const origH = cropState.h * scaleY;
-
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = origW;
-      tempCanvas.height = origH;
-      const tempCtx = tempCanvas.getContext('2d');
-      if (!tempCtx) return;
-      
-      tempCtx.drawImage(
-        img,
-        origX,
-        origY,
-        origW,
-        origH,
-        0,
-        0,
-        origW,
-        origH
-      );
-      
-      const croppedBase64 = tempCanvas.toDataURL('image/png');
-      saveHistory(layers);
-
-      // Calcular nueva posición top-left del lienzo para que la imagen recortada
-      // quede en el mismo lugar que antes (sin saltos bruscos)
-      const rad = (selectedLayer.rotation * Math.PI) / 180;
-      const cos = Math.cos(rad);
-      const sin = Math.sin(rad);
-      
-      // Desplazamiento local
-      const dxLocal = cropState.x;
-      const dyLocal = cropState.y;
-      
-      // Desplazamiento global/mundo
-      const dxWorld = dxLocal * cos - dyLocal * sin;
-      const dyWorld = dxLocal * sin + dyLocal * cos;
-
-      const newX = selectedLayer.x + dxWorld;
-      const newY = selectedLayer.y + dyWorld;
-
-      setLayers(prev => prev.map(l => {
-        if (l.id === selectedLayer.id) {
-          const { originalImageUrl: _, ...rest } = l; // Eliminar originalImageUrl para evitar desincronización
-          return {
-            ...rest,
-            imageUrl: croppedBase64,
-            x: newX,
-            y: newY,
-            width: cropState.w,
-            height: cropState.h
-          } as Layer;
-        }
-        return l;
-      }));
-
-      setCropState(null);
-    };
-  };
-
-  const handleCropHandleMouseDown = (e: React.MouseEvent, handle: 'tl' | 'tr' | 'bl' | 'br' | 't' | 'b' | 'l' | 'r') => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!cropState) return;
-    setActiveAction({
-      type: 'crop',
-      handle,
-      layerId: cropState.layerId,
-      startX: e.clientX,
-      startY: e.clientY,
-      startCropX: cropState.x,
-      startCropY: cropState.y,
-      startCropW: cropState.w,
-      startCropH: cropState.h,
-    });
-  };
-
-
 
   return (
     <div className="app-container">
       <header className="header">
         <div className="title-container">
-          <h1>TheSAS: Meme Studio</h1>
+          <h1>SAStudio</h1>
         </div>
 
         <div className="header-actions">
           <nav className="tabs-header">
-            <button
+            <button 
               className={`tab-btn ${activeTab === 'meme' ? 'active' : ''}`}
               onClick={() => setActiveTab('meme')}
             >
               Generador de Memes
             </button>
-            <button
+            <button 
               className={`tab-btn ${activeTab === 'remover' ? 'active' : ''}`}
               onClick={() => setActiveTab('remover')}
             >
               Quitar Fondo
             </button>
-            <button
+            <button 
               className={`tab-btn ${activeTab === 'downloader' ? 'active' : ''}`}
               onClick={() => setActiveTab('downloader')}
             >
-              Descargador
+              SAS Downloader
             </button>
           </nav>
-          <button
-            onClick={toggleTheme}
-            className="btn-theme-toggle"
-            title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-            aria-label="Alternar tema"
-          >
-            <ThemeIcon className="size-5" />
-          </button>
+          
         </div>
       </header>
 
       <main className="main-content">
         {/* --- PESTAÑA: QUITAR FONDO --- */}
         {activeTab === 'remover' && (
-          <>
-            <div className="bg-remover-container animate-fade-in">
+          <div className="bg-remover-container animate-fade-in">
             {/* Panel de imagen origen */}
             <div 
               className={`panel ${!sourceImage ? 'interactive' : ''}`}
@@ -1623,19 +965,12 @@ export default function App() {
               {resultImage ? (
                 <>
                   <img src={resultImage} alt="Después" className="preview-image" />
-                  <div className="actions-row" style={{ flexWrap: 'wrap', justifyContent: 'center', gap: '8px' }}>
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() => setShowMaskEditor(true)}
-                      title="Pintar manualmente para corregir bordes o restaurar zonas eliminadas de más"
-                    >
-                      ✏️ Refinar a mano
-                    </button>
+                  <div className="actions-row">
                     <button className="btn btn-secondary" onClick={handleDownloadResult}>
                       Guardar PNG
                     </button>
                     <button className="btn btn-accent" onClick={handleSendToCanvas}>
-                      Enviar al Editor →
+                      Enviar al Editor de Memes →
                     </button>
                   </div>
                 </>
@@ -1657,20 +992,6 @@ export default function App() {
               )}
             </div>
           </div>
-
-          {/* Editor de máscara manual */}
-          {showMaskEditor && sourceImage && resultImage && (
-            <MaskRefinementEditor
-              sourceImage={sourceImage}
-              resultImage={resultImage}
-              onSave={(newResult) => {
-                setResultImage(newResult);
-                setShowMaskEditor(false);
-              }}
-              onClose={() => setShowMaskEditor(false)}
-            />
-          )}
-          </>
         )}
 
         {/* --- PESTAÑA: GENERADOR DE MEMES --- */}
@@ -1723,45 +1044,19 @@ export default function App() {
                 >
                   <div 
                     ref={canvasRef}
-                    className="canvas-inner transparency-pattern"
+                    className="canvas-inner"
                     onDragOver={handleCanvasDragOver}
                     onDrop={handleCanvasDrop}
                     style={{
-                      backgroundColor: canvasBackground.type === 'color'
-                        ? (canvasBackground.value === 'transparent' ? undefined : canvasBackground.value)
-                        : 'transparent',
-                      backgroundImage: canvasBackground.type === 'image'
-                        ? `url(${canvasBackground.value})`
-                        : (canvasBackground.value === 'transparent' ? undefined : 'none'),
+                      backgroundColor: canvasBackground.type === 'color' ? canvasBackground.value : 'transparent',
+                      backgroundImage: canvasBackground.type === 'image' ? `url(${canvasBackground.value})` : 'none',
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
                     }}
                   >
-                    {/* Filtros SVG para aplicar curvas a las imágenes del viewport en tiempo real */}
-                    <svg style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }} aria-hidden="true">
-                      <defs>
-                        {layers.map(l => {
-                          if (l.type === 'image' && l.curvesPoints && l.curvesPoints.length > 0) {
-                            const tableVals = getSVGTableValues(l.curvesPoints);
-                            return (
-                              <filter id={`curves-${l.id}`} key={l.id} colorInterpolationFilters="sRGB">
-                                <feComponentTransfer>
-                                  <feFuncR type="table" tableValues={tableVals} />
-                                  <feFuncG type="table" tableValues={tableVals} />
-                                  <feFuncB type="table" tableValues={tableVals} />
-                                </feComponentTransfer>
-                              </filter>
-                            );
-                          }
-                          return null;
-                        })}
-                      </defs>
-                    </svg>
-
                     {/* Render de Capas */}
                     {[...layers].sort((a, b) => a.zIndex - b.zIndex).map(layer => {
                       const isSelected = layer.id === selectedLayerId;
-                      const isLayerCropping = cropState && cropState.layerId === layer.id;
                       return (
                         <div
                           key={layer.id}
@@ -1774,185 +1069,66 @@ export default function App() {
                             transform: `rotate(${layer.rotation}deg)`,
                             zIndex: layer.zIndex,
                           }}
-                          onMouseDown={isLayerCropping ? (e) => e.stopPropagation() : (e) => handleLayerMouseDown(e, layer.id)}
+                          onMouseDown={(e) => handleLayerMouseDown(e, layer.id)}
                         >
-                          {layer.type === 'image' && layer.imageUrl && (() => {
-                            if (isLayerCropping) {
-                              const cs = cropState!;
-                              return (
-                                <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
-                                  {/* Imagen base opacada */}
-                                  <img
-                                    src={layer.imageUrl}
-                                    alt={layer.name}
-                                    style={{
-                                      width: '100%',
-                                      height: '100%',
-                                      objectFit: 'fill',
-                                      pointerEvents: 'none',
-                                      opacity: 0.35,
-                                      filter: `${layer.curvesPoints && layer.curvesPoints.length > 0 ? `url(#curves-${layer.id}) ` : ''}${adjustmentsToFilter(layer.adjustments)}`,
-                                    }}
-                                  />
-                                  
-                                  {/* Caja de recorte activa y brillante */}
-                                  <div
-                                    style={{
-                                      position: 'absolute',
-                                      left: `${cs.x}px`,
-                                      top: `${cs.y}px`,
-                                      width: `${cs.w}px`,
-                                      height: `${cs.h}px`,
-                                      overflow: 'hidden',
-                                      outline: '1.5px dashed var(--primary)',
-                                    }}
-                                  >
-                                    <img
-                                      src={layer.imageUrl}
-                                      alt={`${layer.name} cropped`}
-                                      style={{
-                                        position: 'absolute',
-                                        left: `-${cs.x}px`,
-                                        top: `-${cs.y}px`,
-                                        width: `${layer.width}px`,
-                                        height: `${layer.height}px`,
-                                        objectFit: 'fill',
-                                        pointerEvents: 'none',
-                                        filter: `${layer.curvesPoints && layer.curvesPoints.length > 0 ? `url(#curves-${layer.id}) ` : ''}${adjustmentsToFilter(layer.adjustments)}`,
-                                      }}
-                                    />
-                                  </div>
-
-                                  {/* Tiradores del Recorte */}
-                                  {(['tl', 'tr', 'bl', 'br', 't', 'b', 'l', 'r'] as const).map(handle => {
-                                    let style: React.CSSProperties = {
-                                      position: 'absolute',
-                                      width: '8px',
-                                      height: '8px',
-                                      background: '#ffffff',
-                                      border: '1.5px solid var(--primary)',
-                                      zIndex: 1000,
-                                      transform: 'translate(-50%, -50%)',
-                                    };
-
-                                    if (handle === 'tl') { style.left = `${cs.x}px`; style.top = `${cs.y}px`; style.cursor = 'nwse-resize'; }
-                                    else if (handle === 'tr') { style.left = `${cs.x + cs.w}px`; style.top = `${cs.y}px`; style.cursor = 'nesw-resize'; }
-                                    else if (handle === 'bl') { style.left = `${cs.x}px`; style.top = `${cs.y + cs.h}px`; style.cursor = 'nesw-resize'; }
-                                    else if (handle === 'br') { style.left = `${cs.x + cs.w}px`; style.top = `${cs.y + cs.h}px`; style.cursor = 'nwse-resize'; }
-                                    else if (handle === 't') { style.left = `${cs.x + cs.w / 2}px`; style.top = `${cs.y}px`; style.cursor = 'ns-resize'; }
-                                    else if (handle === 'b') { style.left = `${cs.x + cs.w / 2}px`; style.top = `${cs.y + cs.h}px`; style.cursor = 'ns-resize'; }
-                                    else if (handle === 'l') { style.left = `${cs.x}px`; style.top = `${cs.y + cs.h / 2}px`; style.cursor = 'ew-resize'; }
-                                    else if (handle === 'r') { style.left = `${cs.x + cs.w}px`; style.top = `${cs.y + cs.h / 2}px`; style.cursor = 'ew-resize'; }
-
-                                    return (
-                                      <div
-                                        key={handle}
-                                        style={style}
-                                        onMouseDown={(e) => handleCropHandleMouseDown(e, handle)}
-                                      />
-                                    );
-                                  })}
-                                </div>
-                              );
-                            }
-
-                            return (
-                              <img
-                                src={layer.imageUrl}
-                                alt={layer.name}
-                                style={{
-                                  width: '100%',
-                                  height: '100%',
-                                  objectFit: 'fill',
-                                  pointerEvents: 'none',
-                                  filter: `${layer.curvesPoints && layer.curvesPoints.length > 0 ? `url(#curves-${layer.id}) ` : ''}${adjustmentsToFilter(layer.adjustments)}`,
-                                }}
-                              />
-                            );
-                          })()}
+                          {layer.type === 'image' && layer.imageUrl && (
+                            <img 
+                              src={layer.imageUrl} 
+                              alt={layer.name} 
+                              style={{ width: '100%', height: '100%', objectFit: 'fill', pointerEvents: 'none' }}
+                            />
+                          )}
 
                           {layer.type === 'text' && (
-                            <div
-                              style={{ position: 'relative', width: '100%', height: '100%' }}
-                              onDoubleClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedLayerId(layer.id);
-                                setEditingLayerId(layer.id);
-                              }}
-                            >
-                              {/* Fondo opcional detrás del texto */}
-                              {layer.textBackgroundColor && (
-                                <div
-                                  style={{
-                                    position: 'absolute',
-                                    inset: '6%',
-                                    background: layer.textBackgroundColor,
-                                    borderRadius: 6,
-                                    pointerEvents: 'none',
-                                  }}
-                                />
+                            <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                              {/* Texto trasero (Borde/Stroke) */}
+                              {layer.borderWidth && layer.borderWidth > 0 && (
+                                <div style={{
+                                  position: 'absolute',
+                                  top: 0,
+                                  left: 0,
+                                  width: '100%',
+                                  height: '100%',
+                                  color: layer.borderColor,
+                                  WebkitTextStroke: `${layer.borderWidth * 2}px ${layer.borderColor}`,
+                                  fontFamily: layer.fontFamily,
+                                  fontSize: `${layer.fontSize}px`,
+                                  fontWeight: 'bold',
+                                  textAlign: 'center',
+                                  whiteSpace: 'pre-wrap',
+                                  lineHeight: 1.1,
+                                  display: 'flex',
+                                  justifyContent: 'center',
+                                  alignItems: 'center',
+                                }}>
+                                  {layer.text}
+                                </div>
                               )}
-
-                              {editingLayerId === layer.id ? (
-                                <TextLayerEditor
-                                  layer={layer}
-                                  onChange={(text) => updateSelectedLayer({ text })}
-                                  onCommit={() => setEditingLayerId(null)}
-                                />
-                              ) : (
-                                <>
-                                  {/* Texto trasero (Borde/Stroke) */}
-                                  {layer.borderWidth && layer.borderWidth > 0 && (
-                                    <div style={{
-                                      position: 'absolute',
-                                      top: 0,
-                                      left: 0,
-                                      width: '100%',
-                                      height: '100%',
-                                      color: layer.borderColor,
-                                      WebkitTextStroke: `${layer.borderWidth * 2}px ${layer.borderColor}`,
-                                      fontFamily: layer.fontFamily,
-                                      fontSize: `${layer.fontSize}px`,
-                                      fontWeight: 'bold',
-                                      textAlign: 'center',
-                                      whiteSpace: 'pre-wrap',
-                                      lineHeight: 1.1,
-                                      display: 'flex',
-                                      justifyContent: 'center',
-                                      alignItems: 'center',
-                                      pointerEvents: 'none',
-                                    }}>
-                                      {layer.text}
-                                    </div>
-                                  )}
-                                  {/* Texto delantero (Relleno) */}
-                                  <div style={{
-                                    position: 'absolute',
-                                    top: 0,
-                                    left: 0,
-                                    width: '100%',
-                                    height: '100%',
-                                    color: layer.color,
-                                    fontFamily: layer.fontFamily,
-                                    fontSize: `${layer.fontSize}px`,
-                                    fontWeight: 'bold',
-                                    textAlign: 'center',
-                                    whiteSpace: 'pre-wrap',
-                                    lineHeight: 1.1,
-                                    display: 'flex',
-                                    justifyContent: 'center',
-                                    alignItems: 'center',
-                                    pointerEvents: 'none',
-                                  }}>
-                                    {layer.text}
-                                  </div>
-                                </>
-                              )}
+                              {/* Texto delantero (Relleno) */}
+                              <div style={{
+                                position: 'absolute',
+                                top: 0,
+                                  left: 0,
+                                  width: '100%',
+                                  height: '100%',
+                                color: layer.color,
+                                fontFamily: layer.fontFamily,
+                                fontSize: `${layer.fontSize}px`,
+                                fontWeight: 'bold',
+                                textAlign: 'center',
+                                whiteSpace: 'pre-wrap',
+                                lineHeight: 1.1,
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                              }}>
+                                {layer.text}
+                              </div>
                             </div>
                           )}
 
-                          {/* Tiradores de edición cuando está seleccionada y no se está recortando */}
-                          {isSelected && !isLayerCropping && (
+                          {/* Tiradores de edición cuando está seleccionada */}
+                          {isSelected && (
                             <>
                               <div className="handle handle-tl" onMouseDown={(e) => handleLayerMouseDown(e, layer.id, 'tl')} />
                               <div className="handle handle-tr" onMouseDown={(e) => handleLayerMouseDown(e, layer.id, 'tr')} />
@@ -1978,7 +1154,6 @@ export default function App() {
 
             {/* Barra lateral de control */}
             <aside className="control-sidebar">
-              {/* Sección 1: Añadir Capas */}
               <div className="sidebar-section">
                 <span className="section-title">Añadir Capas</span>
                 <div style={{ display: 'flex', gap: '10px' }}>
@@ -1998,58 +1173,63 @@ export default function App() {
                 />
               </div>
 
-              {/* Sección 2: Lista de Capas */}
+              {/* Fondo del lienzo */}
+              <div className="sidebar-section">
+                <span className="section-title">Fondo del Lienzo</span>
+                <div className="color-picker-row">
+                  <div className="color-input-wrapper">
+                    <input 
+                      type="color" 
+                      value={canvasBackground.type === 'color' ? canvasBackground.value : '#000000'} 
+                      onChange={(e) => handleBgColorChange(e.target.value)} 
+                    />
+                    <span>Color</span>
+                  </div>
+                  <button className="btn btn-secondary" style={{ padding: '8px' }} onClick={() => bgFileInputRef.current?.click()}>
+                    Subir Imagen
+                  </button>
+                </div>
+                <input 
+                  type="file" 
+                  ref={bgFileInputRef} 
+                  onChange={handleBgImageUpload} 
+                  accept="image/*" 
+                  style={{ display: 'none' }} 
+                />
+                {canvasBackground.type === 'image' && (
+                  <button className="btn btn-secondary" style={{ width: '100%', padding: '6px', fontSize: '12px' }} onClick={handleClearBg}>
+                    Limpiar Fondo
+                  </button>
+                )}
+              </div>
+
+              {/* Lista de Capas */}
               <div className="sidebar-section">
                 <span className="section-title">Capas ({layers.length})</span>
                 {layers.length === 0 ? (
                   <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px', padding: '15px' }}>
-                    No hay capas en el lienzo.
+                    No hay capas. Adicione texto o imagenes.
                   </div>
                 ) : (
-                  <div className="layer-list" style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                  <div className="layer-list">
                     {layers.map(layer => {
                       const isActive = layer.id === selectedLayerId;
-                      const isDragging = layer.id === draggedLayerId;
                       return (
-                        <div
-                          key={layer.id}
-                          className={`layer-item ${isActive ? 'active' : ''} ${isDragging ? 'dragging' : ''}`}
+                        <div 
+                          key={layer.id} 
+                          className={`layer-item ${isActive ? 'active' : ''}`}
                           onClick={() => setSelectedLayerId(layer.id)}
-                          draggable
-                          onDragStart={(e) => handleLayerDragStart(e, layer.id)}
-                          onDragOver={(e) => handleLayerDragOver(e)}
-                          onDrop={(e) => handleLayerDrop(e, layer.id)}
-                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', marginBottom: '4px', borderRadius: '6px', background: isActive ? 'var(--primary-glow)' : 'rgba(255,255,255,0.02)', cursor: 'pointer', border: isActive ? '1px solid var(--primary)' : '1px solid transparent' }}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
-                            {layer.type === 'image' && layer.imageUrl ? (
-                              <img
-                                src={layer.imageUrl}
-                                alt={layer.name}
-                                className="layer-thumbnail"
-                                draggable={false}
-                                style={{ width: '28px', height: '28px', objectFit: 'cover', borderRadius: '4px', background: '#333' }}
-                              />
-                            ) : (
-                              <div className="layer-thumbnail layer-thumbnail-text" style={{ width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#444', color: '#fff', borderRadius: '4px', fontWeight: 'bold', fontSize: '12px' }}>
-                                T
-                              </div>
-                            )}
-                            <span style={{ fontSize: '13px', color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }}>
-                              {layer.name}
-                            </span>
-                          </div>
-                          <div style={{ display: 'flex', gap: '4px' }}>
-                            <button
-                              className="icon-btn danger"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteLayer(layer.id);
-                              }}
-                              title="Borrar capa"
-                              style={{ padding: '4px' }}
-                            >
-                              <Trash2 className="size-4" />
+                          <span className="layer-info">{layer.name}</span>
+                          <div className="layer-actions" onClick={e => e.stopPropagation()}>
+                            <button className="icon-btn" onClick={() => handleZIndexChange('up', layer.id)} title="Traer al frente" style={{ fontSize: '10px', fontWeight: 'bold' }}>
+                              UP
+                            </button>
+                            <button className="icon-btn" onClick={() => handleZIndexChange('down', layer.id)} title="Enviar al fondo" style={{ fontSize: '10px', fontWeight: 'bold' }}>
+                              DOWN
+                            </button>
+                            <button className="icon-btn danger" onClick={() => handleDeleteLayer(layer.id)} title="Borrar capa" style={{ fontSize: '10px', fontWeight: 'bold' }}>
+                              BORRAR
                             </button>
                           </div>
                         </div>
@@ -2059,70 +1239,114 @@ export default function App() {
                 )}
               </div>
 
-              {/* Sección 3: Propiedades de Capa Seleccionada O Fondo de Lienzo */}
-              {selectedLayerId && selectedLayer ? (
-                <div className="sidebar-section layer-properties-panel animate-fade-in">
-                  <div className="layer-properties-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <span className="section-title" style={{ color: 'var(--primary-hover)', margin: 0 }}>
-                      Propiedades
-                    </span>
-                    <button
-                      className="btn btn-secondary"
-                      style={{ padding: '2px 8px', fontSize: '10px' }}
-                      onClick={() => setSelectedLayerId(null)}
-                    >
-                      Deseleccionar
-                    </button>
-                  </div>
-                  <LayerPropertiesPanel
-                    layer={selectedLayer}
-                    onUpdate={(updates) => {
-                      setLayers((prev) =>
-                        prev.map((l) => (l.id === selectedLayer.id ? { ...l, ...updates } : l))
-                      );
-                    }}
-                    onOpenStyles={() => {
-                      setBackupLayer(JSON.parse(JSON.stringify(selectedLayer)));
-                      if (selectedLayer.type === 'image') {
-                        setStylesActiveTab('adjustments');
-                      } else {
-                        setStylesActiveTab('fill');
-                      }
-                      setIsStylesModalOpen(true);
-                    }}
-                    onOpenCrop={handleOpenCrop}
-                    cropActive={Boolean(cropState && cropState.layerId === selectedLayer.id)}
-                    onCancelCrop={handleCancelCrop}
-                    onApplyCrop={handleApplyCrop}
-                  />
-                </div>
-              ) : (
-                <div className="sidebar-section">
-                  <span className="section-title">Fondo del Lienzo</span>
-                  <div className="color-picker-row">
-                    <div className="color-input-wrapper">
-                      <input 
-                        type="color" 
-                        value={canvasBackground.type === 'color' && canvasBackground.value !== 'transparent' ? canvasBackground.value : '#ffffff'} 
-                        onChange={(e) => handleBgColorChange(e.target.value)} 
-                      />
-                      <span>Color</span>
+              {/* Propiedades de Capa Seleccionada */}
+              {selectedLayer && (
+                <div className="sidebar-section animate-fade-in" style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <span className="section-title" style={{ color: 'var(--primary-hover)' }}>Propiedades de Capa</span>
+                  
+                  {/* Propiedades si es texto */}
+                  {selectedLayer.type === 'text' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div className="form-group">
+                        <label>Contenido del Texto</label>
+                        <textarea 
+                          rows={3} 
+                          value={selectedLayer.text || ''} 
+                          onChange={(e) => updateSelectedLayer({ text: e.target.value })}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label>Tipografía</label>
+                        <select 
+                          value={selectedLayer.fontFamily || 'Impact'} 
+                          onChange={(e) => updateSelectedLayer({ fontFamily: e.target.value })}
+                        >
+                          <option value="Impact">Impact (Meme)</option>
+                          <option value="Arial">Arial</option>
+                          <option value="Courier New">Courier New</option>
+                          <option value="Comic Sans MS">Comic Sans</option>
+                          <option value="Georgia">Georgia</option>
+                          <option value="Outfit">Outfit (Moderna)</option>
+                          <option value="Inter">Inter</option>
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Tamaño de Letra</label>
+                        <div className="range-control-group">
+                          <input 
+                            type="range" 
+                            min="10" 
+                            max="150" 
+                            value={selectedLayer.fontSize || 40} 
+                            onChange={(e) => updateSelectedLayer({ fontSize: Number(e.target.value) })}
+                          />
+                          <span>{selectedLayer.fontSize}px</span>
+                        </div>
+                      </div>
+
+                      <div className="color-picker-row">
+                        <div className="form-group">
+                          <label>Color Letra</label>
+                          <div className="color-input-wrapper">
+                            <input 
+                              type="color" 
+                              value={selectedLayer.color || '#ffffff'} 
+                              onChange={(e) => updateSelectedLayer({ color: e.target.value })}
+                            />
+                            <span>Fill</span>
+                          </div>
+                        </div>
+
+                        <div className="form-group">
+                          <label>Color Borde</label>
+                          <div className="color-input-wrapper">
+                            <input 
+                              type="color" 
+                              value={selectedLayer.borderColor || '#000000'} 
+                              onChange={(e) => updateSelectedLayer({ borderColor: e.target.value })}
+                            />
+                            <span>Borde</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Grosor del Borde</label>
+                        <div className="range-control-group">
+                          <input 
+                            type="range" 
+                            min="0" 
+                            max="20" 
+                            value={selectedLayer.borderWidth || 0} 
+                            onChange={(e) => updateSelectedLayer({ borderWidth: Number(e.target.value) })}
+                          />
+                          <span>{selectedLayer.borderWidth}</span>
+                        </div>
+                      </div>
                     </div>
-                    <button className="btn btn-secondary" style={{ padding: '8px' }} onClick={() => bgFileInputRef.current?.click()}>
-                      Subir Imagen
-                    </button>
-                  </div>
-                  <input 
-                    type="file" 
-                    ref={bgFileInputRef} 
-                    onChange={handleBgImageUpload} 
-                    accept="image/*" 
-                    style={{ display: 'none' }} 
-                  />
-                  {(canvasBackground.type === 'image' || (canvasBackground.type === 'color' && canvasBackground.value !== 'transparent')) && (
-                    <button className="btn btn-secondary" style={{ width: '100%', padding: '6px', fontSize: '12px', marginTop: '8px' }} onClick={handleClearBg}>
-                      Hacer Transparente
-                    </button>
+                  )}
+
+                  {/* Propiedades si es imagen */}
+                  {selectedLayer.type === 'image' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                      <p>Tipo: Imagen</p>
+                      <p>Dimensiones: {Math.round(selectedLayer.width)}x{Math.round(selectedLayer.height)} px</p>
+                      <p>Rotación: {Math.round(selectedLayer.rotation)}°</p>
+                      <div className="form-group" style={{ marginTop: '10px' }}>
+                        <label>Cambiar Tamaño Ancho</label>
+                        <input 
+                          type="number" 
+                          value={Math.round(selectedLayer.width)} 
+                          onChange={(e) => {
+                            const w = Math.max(10, Number(e.target.value));
+                            const aspect = selectedLayer.width / selectedLayer.height;
+                            updateSelectedLayer({ width: w, height: w / aspect });
+                          }}
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
@@ -2131,27 +1355,6 @@ export default function App() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: 'auto', paddingTop: '15px', borderTop: '1px solid var(--border-color)' }}>
                 <button className="btn btn-accent" onClick={handleExportMeme} disabled={layers.length === 0}>
                   Exportar Meme (PNG)
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  onClick={handleCopyMemeToClipboard}
-                  disabled={layers.length === 0 || copyStatus === 'copying'}
-                  title="Copia el meme como imagen al portapapeles del sistema"
-                  style={
-                    copyStatus === 'success'
-                      ? { color: 'var(--success)', borderColor: 'var(--success)' }
-                      : copyStatus === 'error'
-                        ? { color: 'var(--danger)', borderColor: 'var(--danger)' }
-                        : undefined
-                  }
-                >
-                  {copyStatus === 'copying'
-                    ? 'Copiando…'
-                    : copyStatus === 'success'
-                      ? '✓ Copiado al portapapeles'
-                      : copyStatus === 'error'
-                        ? '✗ No se pudo copiar'
-                        : 'Copiar al portapapeles'}
                 </button>
                 <button className="btn btn-secondary" onClick={handleResetCanvas}>
                   Limpiar Lienzo
@@ -2163,629 +1366,115 @@ export default function App() {
 
         {/* --- PESTAÑA: DESCARGADOR --- */}
         {activeTab === 'downloader' && (
-          <Downloader
-            apiUrl={downloaderUrl}
-            formUrl={ytFormUrl}
-            onFormUrlChange={setYtFormUrl}
-          />
-        )}
-      </main>
-
-      {/* ============================================================ */}
-      {/* Modal de Estilos de Capa (Fx - Photoshop Style) */}
-      {/* ============================================================ */}
-      {isStylesModalOpen && selectedLayerId && (() => {
-        const selectedLayer = layers.find(l => l.id === selectedLayerId);
-        if (!selectedLayer) return null;
-        return (
-          <div className="modal-overlay-styles animate-fade-in" onClick={() => setIsStylesModalOpen(false)}>
-            <div className="layer-styles-modal" onClick={(e) => e.stopPropagation()}>
-              <div className="layer-styles-header">
-                <h3>Estilos de Capa - {selectedLayer.name}</h3>
-                <button className="icon-btn" onClick={() => setIsStylesModalOpen(false)} aria-label="Cerrar modal">×</button>
-              </div>
+          <div className="downloader-container animate-fade-in">
+            <div className="downloader-panel">
+              <h2>Descargador de Video/Audio</h2>
+              <p className="downloader-desc">Ingresa un enlace de YouTube para descargar video en formato MP4 o audio en MP3 de alta calidad.</p>
               
-              <div className="layer-styles-body">
-                <div className="layer-styles-sidebar">
-                  {selectedLayer.type === 'text' ? (
-                    <>
-                      <button
-                        type="button"
-                        className={`layer-styles-tab ${stylesActiveTab === 'fill' ? 'active' : ''}`}
-                        onClick={() => setStylesActiveTab('fill')}
-                      >
-                        Relleno
-                      </button>
-                      <button
-                        type="button"
-                        className={`layer-styles-tab ${stylesActiveTab === 'stroke' ? 'active' : ''}`}
-                        onClick={() => setStylesActiveTab('stroke')}
-                      >
-                        Trazo
-                      </button>
-                      <button
-                        type="button"
-                        className={`layer-styles-tab ${stylesActiveTab === 'background' ? 'active' : ''}`}
-                        onClick={() => setStylesActiveTab('background')}
-                      >
-                        Fondo
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        className={`layer-styles-tab ${stylesActiveTab === 'adjustments' ? 'active' : ''}`}
-                        onClick={() => setStylesActiveTab('adjustments')}
-                      >
-                        Ajustes
-                      </button>
-                      <button
-                        type="button"
-                        className={`layer-styles-tab ${stylesActiveTab === 'curves' ? 'active' : ''}`}
-                        onClick={() => setStylesActiveTab('curves')}
-                      >
-                        Curvas
-                      </button>
-                      <button
-                        type="button"
-                        className={`layer-styles-tab ${stylesActiveTab === 'presets' ? 'active' : ''}`}
-                        onClick={() => setStylesActiveTab('presets')}
-                      >
-                        Filtros
-                      </button>
-                    </>
-                  )}
+              <div className="input-row">
+                <input 
+                  type="text" 
+                  className="downloader-input"
+                  placeholder="https://www.youtube.com/watch?v=..." 
+                  value={ytUrl}
+                  onChange={(e) => setYtUrl(e.target.value)}
+                  disabled={isFetchingFormats || isDownloading}
+                />
+                <button 
+                  className="btn btn-primary" 
+                  onClick={handleFetchFormats}
+                  disabled={isFetchingFormats || isDownloading || !ytUrl.trim()}
+                >
+                  {isFetchingFormats ? 'Buscando...' : 'Buscar'}
+                </button>
+              </div>
+
+              {downloadError && (
+                <div className="download-error-box">
+                  <div className="error-icon">!</div>
+                  <div className="error-text">{downloadError}</div>
                 </div>
-                
-                <div className="layer-styles-content">
+              )}
 
+              {/* Mostrar metadatos y opciones si se obtuvieron formatos */}
+              {formats.length > 0 && !downloadError && (
+                <div className="downloader-options animate-fade-in" style={{ marginTop: '20px' }}>
+                  <div className="video-metadata">
+                    <span className="metadata-title">Título: {videoTitle}</span>
+                    {videoDuration > 0 && (
+                      <span className="metadata-duration">
+                        Duración: {Math.floor(videoDuration / 60)}:{(videoDuration % 60).toString().padStart(2, '0')}
+                      </span>
+                    )}
+                  </div>
 
-                  {/* Controles de Texto - Relleno */}
-                  {selectedLayer.type === 'text' && stylesActiveTab === 'fill' && (
+                  <div className="form-grid">
                     <div className="form-group">
-                      <label>Color de Letra</label>
-                      <div className="color-input-wrapper" style={{ marginTop: '8px' }}>
-                        <input
-                          type="color"
-                          value={selectedLayer.color || '#ffffff'}
-                          onChange={(e) => {
-                            setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, color: e.target.value } : l));
-                          }}
-                        />
-                        <span>Relleno de texto</span>
-                      </div>
+                      <label>Tipo de Formato</label>
+                      <select 
+                        value={downloadFormat} 
+                        onChange={(e) => setDownloadFormat(e.target.value as 'Video' | 'Audio')}
+                        disabled={isDownloading}
+                      >
+                        <option value="Video">Video (MP4)</option>
+                        <option value="Audio">Audio (MP3)</option>
+                      </select>
                     </div>
-                  )}
 
-                  {/* Controles de Texto - Trazo */}
-                  {selectedLayer.type === 'text' && stylesActiveTab === 'stroke' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                      <div className="form-group">
-                        <label>Color de Borde</label>
-                        <div className="color-input-wrapper" style={{ marginTop: '8px' }}>
-                          <input
-                            type="color"
-                            value={selectedLayer.borderColor || '#000000'}
-                            onChange={(e) => {
-                              setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, borderColor: e.target.value } : l));
-                            }}
-                          />
-                          <span>Borde de texto</span>
-                        </div>
-                      </div>
-                      <div className="form-group">
-                        <label>Grosor del Borde</label>
-                        <div className="range-control-group" style={{ marginTop: '8px' }}>
-                          <input
-                            type="range"
-                            min="0"
-                            max="20"
-                            value={selectedLayer.borderWidth || 0}
-                            onChange={(e) => {
-                              setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, borderWidth: Number(e.target.value) } : l));
-                            }}
-                          />
-                          <span>{selectedLayer.borderWidth || 0}px</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Controles de Texto - Fondo */}
-                  {selectedLayer.type === 'text' && stylesActiveTab === 'background' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                      <div className="form-group">
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                          <input
-                            type="checkbox"
-                            checked={Boolean(selectedLayer.textBackgroundColor)}
-                            onChange={(e) => {
-                              setLayers(prev => prev.map(l => {
-                                if (l.id === selectedLayerId) {
-                                  if (e.target.checked) {
-                                    return { ...l, textBackgroundColor: l.textBackgroundColor || '#000000' };
-                                  } else {
-                                    const { textBackgroundColor: _, ...rest } = l;
-                                    return rest as Layer;
-                                  }
-                                }
-                                return l;
-                              }));
-                            }}
-                          />
-                          Fondo del texto activo
-                        </label>
-                      </div>
-                      {selectedLayer.textBackgroundColor && (
-                        <div className="form-group">
-                          <label>Color de Fondo</label>
-                          <div className="color-input-wrapper" style={{ marginTop: '8px' }}>
-                            <input
-                              type="color"
-                              value={selectedLayer.textBackgroundColor}
-                              onChange={(e) => {
-                                setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, textBackgroundColor: e.target.value } : l));
-                              }}
-                            />
-                            <span>Fondo</span>
-                          </div>
-                        </div>
+                    <div className="form-group">
+                      <label>Calidad / Resolución</label>
+                      {downloadFormat === 'Video' ? (
+                        <select 
+                          value={downloadQuality} 
+                          onChange={(e) => setDownloadQuality(e.target.value)}
+                          disabled={isDownloading}
+                        >
+                          {formats.map((fmt) => (
+                            <option key={fmt} value={fmt}>{fmt}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <select disabled value="audio_best">
+                          <option value="audio_best">192 kbps (Mejor disponible)</option>
+                        </select>
                       )}
                     </div>
-                  )}
+                  </div>
 
-                  {/* Controles de Imagen - Ajustes */}
-                  {selectedLayer.type === 'image' && stylesActiveTab === 'adjustments' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      {(
-                        [
-                          { key: 'brightness', label: 'Brillo', min: 0, max: 200, step: 1, unit: '%', defaultVal: 100 },
-                          { key: 'contrast', label: 'Contraste', min: 0, max: 200, step: 1, unit: '%', defaultVal: 100 },
-                          { key: 'saturation', label: 'Saturación', min: 0, max: 200, step: 1, unit: '%', defaultVal: 100 },
-                          { key: 'hue', label: 'Tono', min: -180, max: 180, step: 1, unit: '°', defaultVal: 0 },
-                          { key: 'invert', label: 'Invertir', min: 0, max: 100, step: 1, unit: '%', defaultVal: 0 },
-                          { key: 'sepia', label: 'Sepia', min: 0, max: 100, step: 1, unit: '%', defaultVal: 0 },
-                          {key: 'blur', label: 'Desenfoque', min: 0, max: 20, step: 0.5, unit: 'px', defaultVal: 0},
-                        ] as const
-                      ).map(({ key, label, min, max, step, unit, defaultVal }) => {
-                        const value = selectedLayer.adjustments?.[key] ?? defaultVal;
-                        return (
-                          <div key={key} className="form-group" style={{ marginBottom: '6px' }}>
-                            <div className="range-control-group">
-                              <input
-                                type="range"
-                                min={min}
-                                max={max}
-                                step={step}
-                                value={value}
-                                onChange={(e) => {
-                                  const next = { ...(selectedLayer.adjustments ?? defaultAdjustments()), [key]: Number(e.target.value) };
-                                  setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, adjustments: next } : l));
-                                }}
-                              />
-                              <span style={{ minWidth: 36, textAlign: 'right' }}>{value}{unit}</span>
-                            </div>
-                            <label style={{ fontSize: '11px', marginTop: '2px' }}>{label}</label>
-                          </div>
-                        );
-                      })}
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        style={{ width: '100%', padding: '6px', fontSize: '11px', marginTop: '4px' }}
-                        onClick={() => {
-                          setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, adjustments: defaultAdjustments() } : l));
-                        }}
-                      >
-                        Restablecer ajustes
-                      </button>
-                    </div>
-                  )}
+                  <div className="form-group" style={{ marginTop: '15px' }}>
+                    <label>Nombre de archivo personalizado (Opcional)</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ej. mi_video_favorito (Dejar vacío para el título original)"
+                      value={customFileName}
+                      onChange={(e) => setCustomFileName(e.target.value)}
+                      disabled={isDownloading}
+                    />
+                  </div>
 
-                  {/* Controles de Imagen - Curvas (Photoshop style Curves Editor) */}
-                  {selectedLayer.type === 'image' && stylesActiveTab === 'curves' && (() => {
-                    const points = selectedLayer.curvesPoints || [[0, 0], [255, 255]];
-                    return (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                        <label style={{ fontWeight: 600 }}>Curvas de Color</label>
-                        <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-                          {/* El SVG del editor de curvas */}
-                          <svg
-                            width="200"
-                            height="200"
-                            style={{
-                              background: 'var(--bg-panel)',
-                              border: '1px solid var(--border-color)',
-                              borderRadius: '8px',
-                              overflow: 'visible',
-                              cursor: 'crosshair',
-                              userSelect: 'none'
-                            }}
-                            onMouseDown={handleCurvesSVGMouseDown}
-                            onMouseMove={handleCurvesSVGMouseMove}
-                            onMouseUp={handleCurvesSVGMouseUp}
-                            onMouseLeave={handleCurvesSVGMouseUp}
-                          >
-                            {/* Cuadrículas de referencia (Photoshop style) */}
-                            <line x1="50" y1="0" x2="50" y2="200" stroke="rgba(255,255,255,0.07)" strokeDasharray="3 3" />
-                            <line x1="100" y1="0" x2="100" y2="200" stroke="rgba(255,255,255,0.07)" strokeDasharray="3 3" />
-                            <line x1="150" y1="0" x2="150" y2="200" stroke="rgba(255,255,255,0.07)" strokeDasharray="3 3" />
-                            
-                            <line x1="0" y1="50" x2="200" y2="50" stroke="rgba(255,255,255,0.07)" strokeDasharray="3 3" />
-                            <line x1="0" y1="100" x2="200" y2="100" stroke="rgba(255,255,255,0.07)" strokeDasharray="3 3" />
-                            <line x1="0" y1="150" x2="200" y2="150" stroke="rgba(255,255,255,0.07)" strokeDasharray="3 3" />
-
-                            {/* Diagonal por defecto */}
-                            <line x1="0" y1="200" x2="200" y2="0" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
-
-                            {/* Línea curva conectando los puntos interpolados */}
-                            {(() => {
-                              const svgPointsStr = points
-                                .map((p) => {
-                                  const svgX = (p[0] / 255) * 200;
-                                  const svgY = (1 - p[1] / 255) * 200;
-                                  return `${svgX},${svgY}`;
-                                })
-                                .join(' ');
-                              return (
-                                <polyline
-                                  points={svgPointsStr}
-                                  fill="none"
-                                  stroke="var(--primary)"
-                                  strokeWidth="2.5"
-                                />
-                              );
-                            })()}
-
-                            {/* Círculos para los puntos de control */}
-                            {points.map((p, idx) => {
-                              const svgX = (p[0] / 255) * 200;
-                              const svgY = (1 - p[1] / 255) * 200;
-                              const isEndpoint = idx === 0 || idx === points.length - 1;
-                              return (
-                                <circle
-                                  key={idx}
-                                  cx={svgX}
-                                  cy={svgY}
-                                  r={idx === selectedPointIndex ? 6 : 4.5}
-                                  fill={idx === selectedPointIndex ? 'var(--primary-hover)' : 'var(--primary)'}
-                                  stroke="#fff"
-                                  strokeWidth="1.5"
-                                  style={{ cursor: isEndpoint ? 'ns-resize' : 'move' }}
-                                  onDoubleClick={(e) => handleCurvesDoubleClickPoint(idx, e)}
-                                />
-                              );
-                            })}
-                          </svg>
-
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                            <span style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>Curvas:</span>
-                            <span>• Haz clic para añadir puntos.</span>
-                            <span>• Arrastra para deformar los colores.</span>
-                            <span>• Doble clic para borrar puntos.</span>
-                            <button
-                              type="button"
-                              className="btn btn-secondary"
-                              style={{ padding: '6px', fontSize: '11px', marginTop: '10px' }}
-                              onClick={() => {
-                                setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, curvesPoints: [[0, 0], [255, 255]] } : l));
-                              }}
-                            >
-                              Restablecer curva
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Controles de Imagen - Filtros */}
-                  {selectedLayer.type === 'image' && stylesActiveTab === 'presets' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                      <label>Filtros Rápidos</label>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
-                        {(
-                          [
-                            { label: 'Blanco y negro', apply: { saturation: 0 } },
-                            { label: 'Sepia', apply: { sepia: 80 } },
-                            { label: 'Frío', apply: { hue: -15, saturation: 110 } },
-                            { label: 'Cálido', apply: { hue: 15, saturation: 110 } },
-                            { label: 'Alto contraste', apply: { contrast: 140, saturation: 120 } },
-                            { label: 'Invertir', apply: { invert: 100 } },
-                          ] as const
-                        ).map((preset) => (
-                          <button
-                            key={preset.label}
-                            type="button"
-                            className="layer-preset-btn"
-                            style={{ padding: '10px' }}
-                            onClick={() => {
-                              const next = { ...defaultAdjustments(), ...preset.apply };
-                              setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, adjustments: next } : l));
-                            }}
-                          >
-                            {preset.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              <div className="layer-styles-footer" style={{ display: 'flex', justifyContent: 'space-between', width: '100%', boxSizing: 'border-box' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => {
-                    saveHistory(layers);
-                    setLayers(prev => prev.map(l => {
-                      if (l.id === selectedLayerId) {
-                        if (l.type === 'image') {
-                          return {
-                            ...l,
-                            adjustments: defaultAdjustments(),
-                            curvesPoints: [[0, 0], [255, 255]]
-                          };
-                        } else {
-                          return {
-                            ...l,
-                            color: '#ffffff',
-                            borderColor: '#000000',
-                            borderWidth: 0,
-                            textBackgroundColor: undefined
-                          };
-                        }
-                      }
-                      return l;
-                    }));
-                  }}
-                >
-                  Restablecer
-                </button>
-                
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={() => {
-                      if (backupLayer) {
-                        setLayers(prev => prev.map(l => l.id === backupLayer.id ? backupLayer : l));
-                      }
-                      setIsStylesModalOpen(false);
-                    }}
+                  <button 
+                    className="btn btn-accent btn-large" 
+                    onClick={handleDownload}
+                    disabled={isDownloading}
+                    style={{ marginTop: '25px', width: '100%', padding: '12px' }}
                   >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-accent"
-                    onClick={() => setIsStylesModalOpen(false)}
-                  >
-                    Aceptar
+                    Comenzar Descarga
                   </button>
                 </div>
-              </div>
+              )}
+
+              {(isFetchingFormats || isDownloading) && (
+                <div className="downloader-loader">
+                  <div className="spinner"></div>
+                  <span className="loader-status">
+                    {isFetchingFormats ? 'Obteniendo resoluciones disponibles...' : downloadStatus}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
-        );
-      })()}
-
-
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* TextLayerEditor — textarea overlay que reemplaza al texto cuando la  */
-/* capa está en modo edición. Auto-focus, Enter/Esc para salir.        */
-/* ------------------------------------------------------------------ */
-
-interface TextLayerEditorProps {
-  layer: Layer;
-  onChange: (text: string) => void;
-  onCommit: () => void;
-}
-
-function TextLayerEditor({ layer, onChange, onCommit }: TextLayerEditorProps) {
-  const ref = React.useRef<HTMLTextAreaElement | null>(null);
-
-  React.useEffect(() => {
-    const ta = ref.current;
-    if (!ta) return;
-    ta.focus();
-    ta.select();
-  }, []);
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      onCommit();
-    }
-    // Enter sin Shift confirma la edición; Shift+Enter inserta salto de línea.
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      onCommit();
-    }
-  };
-
-  return (
-    <textarea
-      ref={ref}
-      defaultValue={layer.text ?? ''}
-      onChange={(e) => onChange(e.target.value)}
-      onBlur={onCommit}
-      onKeyDown={handleKeyDown}
-      onMouseDown={(e) => e.stopPropagation()}
-      onClick={(e) => e.stopPropagation()}
-      spellCheck={false}
-      style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        background: 'transparent',
-        color: layer.color,
-        WebkitTextStroke: layer.borderWidth
-          ? `${layer.borderWidth * 2}px ${layer.borderColor}`
-          : undefined,
-        fontFamily: layer.fontFamily,
-        fontSize: `${layer.fontSize}px`,
-        fontWeight: 'bold',
-        textAlign: 'center',
-        lineHeight: 1.1,
-        padding: 0,
-        margin: 0,
-        border: 'none',
-        outline: 'none',
-        resize: 'none',
-        backgroundColor: 'transparent',
-        caretColor: layer.color,
-        overflow: 'hidden',
-        zIndex: 2,
-      }}
-    />
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* LayerPropertiesPanel — panel de propiedades reusable. Se renderiza  */
-/* inline debajo de cada capa cuando se expande con la flecha, y      */
-/* también en la barra lateral para la capa seleccionada.              */
-/* ------------------------------------------------------------------ */
-
-interface LayerPropertiesPanelProps {
-  layer: Layer;
-  onUpdate: (updates: Partial<Layer>) => void;
-  onOpenStyles: () => void;
-  onOpenCrop: () => void;
-  cropActive: boolean;
-  onCancelCrop: () => void;
-  onApplyCrop: () => void;
-}
-
-function LayerPropertiesPanel({ layer, onUpdate, onOpenStyles, onOpenCrop, cropActive, onCancelCrop, onApplyCrop }: LayerPropertiesPanelProps) {
-  return (
-    <div className="layer-properties animate-fade-in">
-      {layer.type === 'text' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div className="form-group">
-            <label>Contenido del Texto</label>
-            <textarea
-              rows={3}
-              value={layer.text || ''}
-              onChange={(e) => onUpdate({ text: e.target.value })}
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Tipografía</label>
-            <select
-              value={layer.fontFamily || 'Impact'}
-              onChange={(e) => onUpdate({ fontFamily: e.target.value })}
-            >
-              <option value="Impact">Impact (Meme)</option>
-              <option value="Arial">Arial</option>
-              <option value="Courier New">Courier New</option>
-              <option value="Comic Sans MS">Comic Sans</option>
-              <option value="Georgia">Georgia</option>
-              <option value="Outfit">Outfit (Moderna)</option>
-              <option value="Inter">Inter</option>
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label>Tamaño de Letra</label>
-            <div className="range-control-group">
-              <input
-                type="range"
-                min="10"
-                max="150"
-                value={layer.fontSize || 40}
-                onChange={(e) => onUpdate({ fontSize: Number(e.target.value) })}
-              />
-              <span>{layer.fontSize}px</span>
-            </div>
-          </div>
-
-          {/* Botón Estilos de Capa (FX) */}
-          <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', marginTop: '8px' }}>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-              onClick={onOpenStyles}
-            >
-              Estilos de Capa (Colores, Bordes...)
-            </button>
-          </div>
-        </div>
-      )}
-
-      {layer.type === 'image' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-          <p>Tipo: Imagen</p>
-          <p>Dimensiones: {Math.round(layer.width)}x{Math.round(layer.height)} px</p>
-          <p>Rotación: {Math.round(layer.rotation)}°</p>
-          <div className="form-group" style={{ marginTop: '10px' }}>
-            <label>Cambiar Tamaño Ancho</label>
-            <input
-              type="number"
-              value={Math.round(layer.width)}
-              onChange={(e) => {
-                const w = Math.max(10, Number(e.target.value));
-                const aspect = layer.width / layer.height;
-                onUpdate({ width: w, height: w / aspect });
-              }}
-            />
-          </div>
-
-          {/* Botones de Estilos y Recorte de Imagen */}
-          <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-              onClick={onOpenStyles}
-              disabled={cropActive}
-            >
-              Ajustes de Color de la Imagen
-            </button>
-            
-            {cropActive ? (
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  style={{ flex: 1, padding: '8px' }}
-                  onClick={onCancelCrop}
-                >
-                  Cancelar Recorte
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-accent"
-                  style={{ flex: 1, padding: '8px' }}
-                  onClick={onApplyCrop}
-                >
-                  Aplicar Recorte
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                className="btn btn-secondary"
-                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                onClick={onOpenCrop}
-              >
-                Recortar Imagen
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+        )}
+      </main>
     </div>
   );
 }
